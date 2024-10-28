@@ -135,3 +135,28 @@ def dataloader_charades_test(args, tokenizer, subset="test"):
 DATALOADER_DICT = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
                    "charades": {"train": dataloader_charades_train, "val": dataloader_charades_test,
                                 "test": dataloader_charades_test}}
+
+# added part
+def mydataloader_charades_train(args, tokenizer):
+    dataset = MyCharadesMeDataloader(
+        subset="train",
+        data_path=args.data_path,
+        features_path=args.features_path,
+        max_words=args.max_words,
+        feature_framerate=args.feature_framerate,
+        tokenizer=tokenizer,
+        max_frames=args.max_frames,
+        frame_order=args.train_frame_order,
+        slice_framepos=args.slice_framepos,
+    )
+    sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size // args.n_gpu,
+        num_workers=args.num_thread_reader,
+        pin_memory=False,
+        shuffle=(sampler is None),
+        sampler=sampler,
+        drop_last=True,
+    )
+    return dataloader, len(dataset), sampler

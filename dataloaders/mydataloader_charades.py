@@ -1,3 +1,15 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+
+import os
+import pandas as pd
+from torch.utils.data import Dataset
+import numpy as np
+import json
+from dataloaders.rawvideo_util import RawVideoExtractor
+
 class MyCharadesMeDataloader(Dataset):
     max_text_per_video = 12
 
@@ -164,8 +176,9 @@ class MyCharadesMeDataloader(Dataset):
 
     def __getitem__(self, item):
         dat = self.dat[item]
+        sentence_num = len(dat['sentences'])
         pairs_text, pairs_mask, group_mask = self._get_text(dat['sentences'])
         duration = dat['length']
         video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration)
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
-        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask
+        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, sentence_num

@@ -151,6 +151,9 @@ def get_args(description='Me-Retriever on Retrieval Task'):
 
     parser.add_argument('--pre_norm', type=int, default=0,
                         help="whether do l2 normalization before clustering.")
+    
+    # added arg
+    parser.add_argument('--K', type=int, default=16, help='The sum of frames will be chosen.')
 
     args = parser.parse_args()
 
