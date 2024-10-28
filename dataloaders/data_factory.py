@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from dataloaders.dataloader_activity import ActivityNetMeDataLoader
 from dataloaders.dataloader_charades import CharadesMeDataloader
+from dataloaders.mydataloader_charades import MyCharadesMeDataloader
 
 def dataloader_factory(args, tokenizer, logger):
     assert args.datatype in DATALOADER_DICT
