@@ -166,6 +166,7 @@ class MeRetriever(MeRetrieverPretrained):
             video_mask = self.get_video_mask_after_cluster(video_mask)
             vt_mask = self.get_interval_after_cluster(group_mask, vt_mask)
 
+        #modified
         if self.post_process == 'topk':
             batch_size = text.shape[0]
             K = self.task_config.K

@@ -60,6 +60,7 @@ class Trainer(BaseTrainer):
                 # multi-gpu does scattering it-self
                 batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
 
+            #modified
             input_ids, input_mask, group_mask, video, video_mask, vt_mask, sentence_num = batch
             
             loss1, loss2, reg_loss = model(input_ids, input_mask, group_mask, video, sentence_num, video_mask, vt_mask)
