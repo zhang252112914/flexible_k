@@ -176,9 +176,10 @@ class MeRetriever(MeRetrieverPretrained):
                 reminder = K % sentence_num[i]
                 pick_arrangement.append([frame_per_sentence]*sentence_num[i])
                 pick_arrangement[i][-1] += reminder
-            visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
+            sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
+                                                                         video, video_mask, group_mask, shaped=True,
+                                                                         video_frame=video_frame)
             sentence_embeddings = self.get_text_output(text, text_mask, group_mask, sentence_num, shaped=True)
-            sequence_output = self.get_sequence_output(text, text_mask, group_mask, shaped=True)
             visual_output, video_mask = pick_frames(sentence_embeddings, visual_output, group_mask, video_mask, pick_arrangement)
 
         if self.post_process == 'cluster':
