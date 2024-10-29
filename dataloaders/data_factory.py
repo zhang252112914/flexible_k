@@ -131,11 +131,6 @@ def dataloader_charades_test(args, tokenizer, subset="test"):
     )
     return dataloader, len(dataset)
 
-# modified charades part
-DATALOADER_DICT = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
-                   "charades": {"train": mydataloader_charades_train, "val": dataloader_charades_test,
-                                "test": dataloader_charades_test}}
-
 # added part
 def mydataloader_charades_train(args, tokenizer):
     dataset = MyCharadesMeDataloader(
@@ -160,3 +155,9 @@ def mydataloader_charades_train(args, tokenizer):
         drop_last=True,
     )
     return dataloader, len(dataset), sampler
+
+# modified charades part
+DATALOADER_DICT = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
+                   "charades": {"train": mydataloader_charades_train, "val": dataloader_charades_test,
+                                "test": dataloader_charades_test}}
+

@@ -170,10 +170,10 @@ class MeRetriever(MeRetrieverPretrained):
             batch_size = text.shape[0]
             K = self.task_config.K
             pick_arrangement = []
-            for i in batch_size:
-                frame_per_sentence = K // sentence_num
-                reminder = K % sentence_num
-                pick_arrangement.append([frame_per_sentence]*reminder)
+            for i in range(batch_size):
+                frame_per_sentence = K // sentence_num[i]
+                reminder = K % sentence_num[i]
+                pick_arrangement.append([frame_per_sentence]*sentence_num[i])
                 pick_arrangement[i][-1] += reminder
             visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
             sentence_embeddings = self.get_text_output(text, text_mask, group_mask, sentence_num, shaped=True)
