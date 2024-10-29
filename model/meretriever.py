@@ -167,14 +167,18 @@ class MeRetriever(MeRetrieverPretrained):
             vt_mask = self.get_interval_after_cluster(group_mask, vt_mask)
 
         if self.post_process == 'topk':
+            batch_size = text.shape[0]
             K = self.task_config.K
-            frame_per_sentence = K // sentence_num
-            reminder = K % sentence_num
-            pick_arrangement = [frame_per_sentence]*reminder
-            pick_arrangement[-1] += reminder
+            pick_arrangement = []
+            for i in batch_size:
+                frame_per_sentence = K // sentence_num
+                reminder = K % sentence_num
+                pick_arrangement.append([frame_per_sentence]*reminder)
+                pick_arrangement[i][-1] += reminder
             visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
-            text_output, sequence_output = self.get_text_output(text, text_mask, group_mask, shaped=True)
-            visual_output, video_mask = pick_frames(text_output, visual_output, group_mask, video_mask, pick_arrangement, similarity_metric = 'euclidean')
+            sentence_embeddings = self.get_text_output(text, text_mask, group_mask, sentence_num, shaped=True)
+            sequence_output = self.get_sequence_output(text, text_mask, group_mask, shaped=True)
+            visual_output, video_mask = pick_frames(sentence_embeddings, visual_output, group_mask, video_mask, pick_arrangement)
 
         if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
@@ -222,6 +226,7 @@ class MeRetriever(MeRetrieverPretrained):
             video_mask = video_mask.view(-1, video_mask.shape[-1])
             video = torch.as_tensor(video).float()
             b, pair, bs, ts, channel, h, w = video.shape
+            # b batch pari 1 bs 1 ts 1
             video = video.view(b * pair * bs * ts, channel, h, w)
             video_frame = bs * ts
 
@@ -232,16 +237,19 @@ class MeRetriever(MeRetrieverPretrained):
         return visual_hidden
     
     # added : get the embedding of every sentence but not stack
-    def get_text_output(self, text, attention_mask, group_mask, shaped=False):
-        bs = text.shape[0]
-        res = []
+    def get_text_output(self, text, attention_mask, group_mask, sentence_num, shaped=False):
+        bs, max_text_per_video, max_words = text.shape
+        embedding_dim = self.clip.encode_text(text[0][0:1]).shape[-1]
+        sentence_embeddings = torch.zeros((bs, max_text_per_video, embedding_dim), device=text.device)
         for i in range(bs):
-            sequence_hidden = self.clip.encode_text(text[i][group_mask[i] > 0]).float()
-            sequence_hidden = torch.concat((sequence_hidden, torch.zeros(text[i].shape[0] - sequence_hidden.shape[0],
-                                                                         sequence_hidden.shape[1]).to(text.device)))
-            res.append(sequence_hidden)
-        ret = torch.stack(res)
-        return res, ret
+        # Process each sentence individually for the current batch item
+            for j in range(max_text_per_video):
+                if group_mask[i, j] > 0:  # Only encode valid sentences
+                    sentence_embedding = self.clip.encode_text(text[i, j].unsqueeze(0)).float()
+                    sentence_embeddings[i, j, :] = sentence_embedding
+
+        return sentence_embeddings
+
 
     def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1):
         if shaped is False:
