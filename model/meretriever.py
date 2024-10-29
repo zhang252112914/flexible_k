@@ -11,6 +11,7 @@ from modules.module_cross import CrossModel, CrossConfig, Transformer as Transfo
 from modules.util_module import PreTrainedModel, AllGather, CrossEnMulti, CrossEnMulti_unbalanced
 from modules.cluster.fast_kmeans import batch_fast_kmedoids
 from modules.util_module import all_gather_only as allgather
+from modules.topk_pick import pick_frames
 
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ class MeRetriever(MeRetrieverPretrained):
         transformer_layers = len(
             set(k.split(".")[2] for k in clip_state_dict if k.startswith(f"transformer.resblocks")))
 
+        # indeed, there is no parameter named in config by the authors
         self.cluster_inter = getattr(task_config, "cluster_inter", 0)
         if self.cluster_inter:
             self.cluster_algo = getattr(task_config, "cluster_algo", None)
@@ -151,7 +153,7 @@ class MeRetriever(MeRetrieverPretrained):
 
         self.apply(self.init_weights)
 
-    def forward(self, text, text_mask, group_mask, video, video_mask=None, vt_mask=None):
+    def forward(self, text, text_mask, group_mask, video, sentence_num=1,video_mask=None, vt_mask=None):
         video_mask = video_mask.view(-1, video_mask.shape[-1])
 
         # T x 3 x H x W
@@ -159,15 +161,27 @@ class MeRetriever(MeRetrieverPretrained):
         video = video.view(b * pair * bs * ts, channel, h, w)
         video_frame = bs * ts
 
+        # this part seems would never be used
         if self.cluster_inter:
             video_mask = self.get_video_mask_after_cluster(video_mask)
             vt_mask = self.get_interval_after_cluster(group_mask, vt_mask)
-        
+
+        if self.post_process == 'topk':
+            K = self.task_config.K
+            frame_per_sentence = K // sentence_num
+            reminder = K % sentence_num
+            pick_arrangement = [frame_per_sentence]*reminder
+            pick_arrangement[-1] += reminder
+            visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
+            text_output, sequence_output = self.get_text_output(text, text_mask, group_mask, shaped=True)
+            visual_output, video_mask = pick_frames(text_output, visual_output, group_mask, video_mask, pick_arrangement, similarity_metric = 'euclidean')
+
+        if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
-        sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
+        # because in this process sentences has been all transformed in a same tensor, so we need to pick frames before this
+            sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
-        if self.post_process == 'cluster':
             assign, medoids = batch_fast_kmedoids(visual_output, self.task_config.post_cluster_centroids,
                                                   distance=self.task_config.cluster_distance,
                                                   threshold=self.task_config.cluster_threshold,
@@ -216,6 +230,18 @@ class MeRetriever(MeRetrieverPretrained):
         visual_hidden = visual_hidden.view(bs_pair, -1, visual_hidden.size(-1))
 
         return visual_hidden
+    
+    # added : get the embedding of every sentence but not stack
+    def get_text_output(self, text, attention_mask, group_mask, shaped=False):
+        bs = text.shape[0]
+        res = []
+        for i in range(bs):
+            sequence_hidden = self.clip.encode_text(text[i][group_mask[i] > 0]).float()
+            sequence_hidden = torch.concat((sequence_hidden, torch.zeros(text[i].shape[0] - sequence_hidden.shape[0],
+                                                                         sequence_hidden.shape[1]).to(text.device)))
+            res.append(sequence_hidden)
+        ret = torch.stack(res)
+        return res, ret
 
     def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1):
         if shaped is False:
