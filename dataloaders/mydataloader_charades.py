@@ -85,6 +85,7 @@ class MyCharadesMeDataloader(Dataset):
         return len(self.dat)
 
     def _get_text(self, sentences):
+        # k is limit and n is the actual number of sentences
         k = self.max_text_per_video
         n = len(sentences)
         pairs_text = np.zeros((k, self.max_words), dtype=np.long)
@@ -123,7 +124,8 @@ class MyCharadesMeDataloader(Dataset):
                           self.rawVideoExtractor.size, self.rawVideoExtractor.size), dtype=np.float64)
         # video_path = self.video_dict[idx]
         try:
-            for i in range(1):
+            # actually the duration is useless, because all the video will be loaded
+            for i in range(1): # range 1 because the video is only one hh
                 # Should be optimized by gathering all asking of this video
                 raw_video_data = self.rawVideoExtractor.get_video_data(video_path, dur, s, e)
 
@@ -141,14 +143,15 @@ class MyCharadesMeDataloader(Dataset):
                             video_slice = raw_video_slice[sample_indx, ...]
                     else:
                         video_slice = raw_video_slice
-
+                    #because the frame_order is 0, so the video_slice is not changed
                     video_slice = self.rawVideoExtractor.process_frame_order(video_slice, frame_order=self.frame_order)
 
-                    slice_len = video_slice.shape[0]
+                    slice_len = video_slice.shape[0] # num of frames
                     max_video_length[i] = max_video_length[i] if max_video_length[i] > slice_len else slice_len
                     if slice_len < 1:
                         pass
                     else:
+                        # make the first slice_len frames of video[i] to be the target duration frames
                         video[i][:slice_len, ...] = video_slice
                 else:
                     print("video path: {} error. video id: {}, start: {}, end: {}".format(video_path, idx, s, e))
@@ -156,8 +159,9 @@ class MyCharadesMeDataloader(Dataset):
             print("video path: {} error. video id: {}, start: {}, end: {}, Error: {}".format(video_path, idx, s, e,
                                                                                              excep))
             raise excep
-
+        
         for i, v_length in enumerate(max_video_length):
+            #video_mask length is also the length of the slice_len
             video_mask[i][:v_length] = [1] * v_length
 
         return video, video_mask
@@ -177,9 +181,16 @@ class MyCharadesMeDataloader(Dataset):
 
     def __getitem__(self, item):
         dat = self.dat[item]
-        sentence_num = len(dat['sentences'])
+        # pair_text = np.zeros((sentence_num, self.max_words), dtype=np.long)
+        # pair_mask = np.zeros((sentence_num, self.max_words), dtype=np.long)
+        # group_mask = np.zeros((sentence_num,), dtype=np.long)
         pairs_text, pairs_mask, group_mask = self._get_text(dat['sentences'])
+        sentence_num = pairs_text.shape[0]
         duration = dat['length']
+        #below the _get_rawvideo's first parameter duration means length and 0 means start time, second duration means end time 
         video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration)
+        #vt_mask means video-text mask
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
+        # pairs_text = (sentence_num, max_words)
+        # video = (1, max_frames, 1, 3, H, W) I don't know why the third dimension is 1(maybe it represent the number of segment in a video, but it is ignored now)
         return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, sentence_num

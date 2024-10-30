@@ -44,6 +44,7 @@ class RawVideoExtractorCV2():
             n = len(images)
             start_idx = int(start_time*n/total_duration)
             end_idx = int(end_time*n/total_duration)
+            #every traget image is orgnized into a tnensor(frame_number, channel, height, width)(maybe this)
             video_data = th.tensor(np.stack(images[start_idx: end_idx]))
         else:
             video_data = th.zeros(1)
@@ -55,6 +56,7 @@ class RawVideoExtractorCV2():
 
     def process_raw_data(self, raw_video_data):
         tensor_size = raw_video_data.size()
+        # this adjust make the first dimension to be the frame_number
         tensor = raw_video_data.view(-1, 1, tensor_size[-3], tensor_size[-2], tensor_size[-1])
         return tensor
 
