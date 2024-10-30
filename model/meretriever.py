@@ -157,8 +157,12 @@ class MeRetriever(MeRetrieverPretrained):
         video_mask = video_mask.view(-1, video_mask.shape[-1])
 
         # T x 3 x H x W
+        #b=batch_size pair=1 bs=max_frames ts=1
         b, pair, bs, ts, channel, h, w = video.shape
+        # shift the video to (num, channel, h, w)
+        # why change into this shape?
         video = video.view(b * pair * bs * ts, channel, h, w)
+        # video_frame = max_frames
         video_frame = bs * ts
 
         # this part seems would never be used
@@ -174,13 +178,17 @@ class MeRetriever(MeRetrieverPretrained):
             for i in range(batch_size):
                 frame_per_sentence = K // sentence_num[i]
                 reminder = K % sentence_num[i]
-                pick_arrangement.append([frame_per_sentence]*sentence_num[i])
-                pick_arrangement[i][-1] += reminder
+                arrangement = [frame_per_sentence] * sentence_num[i]
+                arrangement[-1] += reminder
+                pick_arrangement.append(arrangement)
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
-            sentence_embeddings = self.get_text_output(text, text_mask, group_mask, sentence_num, shaped=True)
-            visual_output, video_mask = pick_frames(sentence_embeddings, visual_output, group_mask, video_mask, pick_arrangement)
+            picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num)
+            idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
+            visual_output = visual_output[idx, picked_frames]
+            video_mask = video_mask[idx, picked_frames]
+            vt_mask = vt_mask[idx, :, picked_frames].permute(0, 2, 1)
 
         if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
@@ -237,20 +245,6 @@ class MeRetriever(MeRetrieverPretrained):
         visual_hidden = visual_hidden.view(bs_pair, -1, visual_hidden.size(-1))
 
         return visual_hidden
-    
-    # added : get the embedding of every sentence but not stack
-    def get_text_output(self, text, attention_mask, group_mask, sentence_num, shaped=False):
-        bs, max_text_per_video, max_words = text.shape
-        embedding_dim = self.clip.encode_text(text[0][0:1]).shape[-1]
-        sentence_embeddings = torch.zeros((bs, max_text_per_video, embedding_dim), device=text.device)
-        for i in range(bs):
-        # Process each sentence individually for the current batch item
-            for j in range(max_text_per_video):
-                if group_mask[i, j] > 0:  # Only encode valid sentences
-                    sentence_embedding = self.clip.encode_text(text[i, j].unsqueeze(0)).float()
-                    sentence_embeddings[i, j, :] = sentence_embedding
-
-        return sentence_embeddings
 
 
     def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1):

@@ -113,7 +113,7 @@ class MyCharadesMeDataloader(Dataset):
             pairs_mask[i] = np.array(input_mask)
             group_mask[i] = 1
 
-        return pairs_text, pairs_mask, group_mask
+        return pairs_text, pairs_mask, group_mask, n
 
     def _get_rawvideo(self, video_path, dur, s, e):
         video_mask = np.zeros((1, self.max_frames), dtype=np.long)
@@ -184,8 +184,7 @@ class MyCharadesMeDataloader(Dataset):
         # pair_text = np.zeros((sentence_num, self.max_words), dtype=np.long)
         # pair_mask = np.zeros((sentence_num, self.max_words), dtype=np.long)
         # group_mask = np.zeros((sentence_num,), dtype=np.long)
-        pairs_text, pairs_mask, group_mask = self._get_text(dat['sentences'])
-        sentence_num = pairs_text.shape[0]
+        pairs_text, pairs_mask, group_mask, sentence_num = self._get_text(dat['sentences'])
         duration = dat['length']
         #below the _get_rawvideo's first parameter duration means length and 0 means start time, second duration means end time 
         video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration)
