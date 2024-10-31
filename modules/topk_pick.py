@@ -27,4 +27,4 @@ def pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arr
         frame_indices = torch.cat(frame_indices)[:K]
         frame_indices = frame_indices.sort()[0]  # 排序以保持帧顺序一致
         picked_frames[i, :len(frame_indices)] = frame_indices
-    return picked_frames
+    return picked_frames.long()
