@@ -204,6 +204,11 @@ class MeRetriever(MeRetrieverPretrained):
             visual_output = visual_output[idx, medoids]
             video_mask = video_mask[idx, medoids]
             vt_mask = vt_mask[idx, :, medoids].permute(0, 2, 1)
+        
+        if self.post_process == 'none':
+            sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
+                                                                         video, video_mask, group_mask, shaped=True,
+                                                                         video_frame=video_frame)
 
         if self.training:
             if self.multi2multi:
