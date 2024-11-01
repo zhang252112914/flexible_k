@@ -94,6 +94,7 @@ def get_args(description='Me-Retriever on Retrieval Task'):
                         help="Frame order, 0: ordinary order; 1: reverse order; 2: random order.")
 
     parser.add_argument('--freeze_layer_num', type=int, default=0, help="Layer NO. of CLIP need to freeze.")
+    # when the frames extract from video is more than max frames number, then the --slice_framepos will tell how to sample frames agin
     parser.add_argument('--slice_framepos', type=int, default=0, choices=[0, 1, 2],
                         help="0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly.")
     parser.add_argument('--linear_patch', type=str, default="2d", choices=["2d", "3d"],
