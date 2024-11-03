@@ -160,7 +160,7 @@ def mydataloader_charades_train(args, tokenizer):
     )
     return dataloader, len(dataset), sampler
 def shuffle_dataloader_charades_train(args, tokenizer):
-    dataset = MyCharadesMeDataloader(
+    dataset = ShuffleCharadesMeDataloader(
         subset="train",
         data_path=args.data_path,
         features_path=args.features_path,
