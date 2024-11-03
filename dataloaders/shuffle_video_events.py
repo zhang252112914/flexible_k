@@ -6,7 +6,7 @@ def shuffle_video_events(segment_num, pairs, video, video_mask, duration):
     shuffle_pairs.sort(key=lambda x: x[0])
     random.shuffle(shuffle_pairs)
     frame_num = np.sum(video_mask)
-    new_video = np.zeros(video.shape, dtype=video.dtype)
+    new_video = np.zeros_like(video.shape, dtype=video.dtype)
     new_start = 0
     for i in range(segment_num):
         pair = shuffle_pairs[i]
