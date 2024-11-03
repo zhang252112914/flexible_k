@@ -1,0 +1,2 @@
+--shuffle : apply shuffle on events in video
+--post_process : select frames or not (or specific method)

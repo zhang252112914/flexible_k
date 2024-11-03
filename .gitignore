@@ -3,3 +3,5 @@
 /eval_output/
 __pycache__/
 /output32/
+/output_no_shuffle/
+/output_shuffle/
