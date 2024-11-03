@@ -2,6 +2,10 @@ import random
 import numpy as np
 
 def shuffle_video_events(segment_num, pairs, video, video_mask, duration):
+    if segment_num == 0:
+        return video, video_mask
+    if segment_num == 1:
+        return video, video_mask
     shuffle_pairs = pairs.copy()
     shuffle_pairs.sort(key=lambda x: x[0])
     random.shuffle(shuffle_pairs)
