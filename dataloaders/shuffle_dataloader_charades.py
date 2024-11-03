@@ -1,4 +1,3 @@
-# modified
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
@@ -10,8 +9,10 @@ from torch.utils.data import Dataset
 import numpy as np
 import json
 from dataloaders.rawvideo_util import RawVideoExtractor
+from dataloaders.shuffle_video_events import shuffle_video_events
 
-class MyCharadesMeDataloader(Dataset):
+
+class ShuffleCharadesMeDataloader(Dataset):
     max_text_per_video = 12
 
     def __init__(
@@ -20,6 +21,7 @@ class MyCharadesMeDataloader(Dataset):
             data_path,
             features_path,
             tokenizer,
+            shuffle_events,
             max_words=30,
             feature_framerate=1.0,
             max_frames=100,
@@ -41,6 +43,7 @@ class MyCharadesMeDataloader(Dataset):
         subset = 'test' if subset == 'val' else subset
         self.subset = subset
         assert self.subset in ["train", "val", "test"]
+        self.shuffle_events = shuffle_events
 
         fname = os.path.join(self.data_path, f'charades_sta_{subset}.txt')
         with open(fname, 'r') as f:
@@ -59,13 +62,21 @@ class MyCharadesMeDataloader(Dataset):
                 if video_id_ not in ID:
                     continue
                 file_path_ = os.path.join(root, video_file)
-                video_dict[video_id_] = {'video': file_path_, 'sentences': [], 'start': [], 'end': []}
+                video_dict[video_id_] = {'video': file_path_, 'sentences': [], 'start': [], 'end': [], 'segment_num': 1,  'pair': []}
         for i in range(len(ID)):
             if ID[i] not in video_dict:
                 continue
             video_dict[ID[i]]['sentences'].append(desc[i])
             video_dict[ID[i]]['start'].append(dur[i][0])
             video_dict[ID[i]]['end'].append(dur[i][1])
+        for key in video_dict:
+            start = video_dict[key]['start']
+            end = video_dict[key]['end']
+            video_segments = list(zip(start, end))
+            video_segments = list(set(video_segments))
+            video_dict[key]['segment_num'] = len(video_segments)
+            video_dict[key]['pair'] = video_segments            
+
 
         df = pd.read_csv(os.path.join(self.data_path, f'Charades_v1_{subset}.csv'))
         for k in range(len(df)):
@@ -85,7 +96,6 @@ class MyCharadesMeDataloader(Dataset):
         return len(self.dat)
 
     def _get_text(self, sentences):
-        # k is limit and n is the actual number of sentences
         k = self.max_text_per_video
         n = len(sentences)
         pairs_text = np.zeros((k, self.max_words), dtype=np.long)
@@ -113,7 +123,7 @@ class MyCharadesMeDataloader(Dataset):
             pairs_mask[i] = np.array(input_mask)
             group_mask[i] = 1
 
-        return pairs_text, pairs_mask, group_mask, n
+        return pairs_text, pairs_mask, group_mask
 
     def _get_rawvideo(self, video_path, dur, s, e):
         video_mask = np.zeros((1, self.max_frames), dtype=np.long)
@@ -124,8 +134,7 @@ class MyCharadesMeDataloader(Dataset):
                           self.rawVideoExtractor.size, self.rawVideoExtractor.size), dtype=np.float64)
         # video_path = self.video_dict[idx]
         try:
-            # actually the duration is useless, because all the video will be loaded
-            for i in range(1): # range 1 because the video is only one hh
+            for i in range(1):
                 # Should be optimized by gathering all asking of this video
                 raw_video_data = self.rawVideoExtractor.get_video_data(video_path, dur, s, e)
 
@@ -143,15 +152,14 @@ class MyCharadesMeDataloader(Dataset):
                             video_slice = raw_video_slice[sample_indx, ...]
                     else:
                         video_slice = raw_video_slice
-                    #because the frame_order is 0, so the video_slice is not changed
+
                     video_slice = self.rawVideoExtractor.process_frame_order(video_slice, frame_order=self.frame_order)
 
-                    slice_len = video_slice.shape[0] # num of frames
+                    slice_len = video_slice.shape[0]
                     max_video_length[i] = max_video_length[i] if max_video_length[i] > slice_len else slice_len
                     if slice_len < 1:
                         pass
                     else:
-                        # make the first slice_len frames of video[i] to be the target duration frames
                         video[i][:slice_len, ...] = video_slice
                 else:
                     print("video path: {} error. video id: {}, start: {}, end: {}".format(video_path, idx, s, e))
@@ -159,9 +167,8 @@ class MyCharadesMeDataloader(Dataset):
             print("video path: {} error. video id: {}, start: {}, end: {}, Error: {}".format(video_path, idx, s, e,
                                                                                              excep))
             raise excep
-        
+
         for i, v_length in enumerate(max_video_length):
-            #video_mask length is also the length of the slice_len
             video_mask[i][:v_length] = [1] * v_length
 
         return video, video_mask
@@ -181,15 +188,9 @@ class MyCharadesMeDataloader(Dataset):
 
     def __getitem__(self, item):
         dat = self.dat[item]
-        # pair_text = np.zeros((sentence_num, self.max_words), dtype=np.long)
-        # pair_mask = np.zeros((sentence_num, self.max_words), dtype=np.long)
-        # group_mask = np.zeros((sentence_num,), dtype=np.long)
-        pairs_text, pairs_mask, group_mask, sentence_num = self._get_text(dat['sentences'])
+        pairs_text, pairs_mask, group_mask = self._get_text(dat['sentences'])
         duration = dat['length']
-        #below the _get_rawvideo's first parameter duration means length and 0 means start time, second duration means end time 
         video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration)
-        #vt_mask means video-text mask
+        video, video_mask = shuffle_video_events(dat['segment_num'], dat['pair'], video, video_mask, duration)
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
-        # pairs_text = (sentence_num, max_words)
-        # video = (1, max_frames, 1, 3, H, W) I don't know why the third dimension is 1(maybe it represent the number of segment in a video, but it is ignored now)
-        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, sentence_num
+        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask

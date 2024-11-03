@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from dataloaders.dataloader_activity import ActivityNetMeDataLoader
 from dataloaders.dataloader_charades import CharadesMeDataloader
 from dataloaders.mydataloader_charades import MyCharadesMeDataloader
+from dataloaders.shuffle_dataloader_charades import ShuffleCharadesMeDataloader
 
 def dataloader_factory(args, tokenizer, logger):
     assert args.datatype in DATALOADER_DICT
@@ -33,7 +34,10 @@ def dataloader_factory(args, tokenizer, logger):
     train_dataloader, train_length, train_sampler = None, 0, None
     if args.do_train:
         # load the data(create corresponding dataloader)
-        train_dataloader, train_length, train_sampler = DATALOADER_DICT[args.datatype]["train"](args, tokenizer)
+        if args.shuffle_events:
+            train_dataloader, train_length, train_sampler = DATALOADER_DICT2[args.datatype]["train"](args, tokenizer)
+        else:
+            train_dataloader, train_length, train_sampler = DATALOADER_DICT[args.datatype]["train"](args, tokenizer)
     
     return train_dataloader, test_dataloader, train_length, test_length, train_sampler
 
@@ -155,9 +159,36 @@ def mydataloader_charades_train(args, tokenizer):
         drop_last=True,
     )
     return dataloader, len(dataset), sampler
+def shuffle_dataloader_charades_train(args, tokenizer):
+    dataset = MyCharadesMeDataloader(
+        subset="train",
+        data_path=args.data_path,
+        features_path=args.features_path,
+        max_words=args.max_words,
+        feature_framerate=args.feature_framerate,
+        tokenizer=tokenizer,
+        max_frames=args.max_frames,
+        frame_order=args.train_frame_order,
+        slice_framepos=args.slice_framepos,
+        shuffle_events=args.shuffle_events
+    )
+    sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size // args.n_gpu,
+        num_workers=args.num_thread_reader,
+        pin_memory=False,
+        shuffle=(sampler is None),
+        sampler=sampler,
+        drop_last=True,
+    )
+    return dataloader, len(dataset), sampler
 
 # modified charades part
 DATALOADER_DICT = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
                    "charades": {"train": mydataloader_charades_train, "val": dataloader_charades_test,
+                                "test": dataloader_charades_test}}
+DATALOADER_DICT2 = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
+                   "charades": {"train": shuffle_dataloader_charades_train, "val": dataloader_charades_test,
                                 "test": dataloader_charades_test}}
 
