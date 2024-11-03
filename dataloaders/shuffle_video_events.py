@@ -1,7 +1,7 @@
 import random
 import numpy as np
 
-def shuffle_video_events(segment_num, pairs, start, video, video_mask, duration):
+def shuffle_video_events(segment_num, pairs, video, video_mask, duration):
     shuffle_pairs = pairs.copy()
     shuffle_pairs.sort(key=lambda x: x[0])
     random.shuffle(shuffle_pairs)
