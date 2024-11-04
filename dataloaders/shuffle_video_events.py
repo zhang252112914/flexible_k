@@ -71,5 +71,5 @@ def video_expansion(raw_video, pairs, i, duration):
         new_end = pairs[j][1] + intersection_length
         new_pairs.append((new_start, new_end))
 
-    new_video = torch.tensor(np.stack(new_video))
+    new_video = torch.tensor(np.stack(new_video),dtype=raw_video.dtype, device=raw_video.device)
     return new_video, new_duration, new_pairs
