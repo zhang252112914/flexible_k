@@ -138,9 +138,9 @@ class ShuffleCharadesMeDataloader(Dataset):
                 raw_video_data = self.rawVideoExtractor.get_video_data(video_path, dur, s, e)
 
                 if segment_num > 1:
-                    for i in range(segment_num-1):
-                        if pairs[i][1] > pairs[i+1][0]:
-                            raw_video_data, dur, pairs = sve.video_expansion(raw_video_data, pairs, i, dur)
+                    for j in range(segment_num-1):
+                        if pairs[j][1] > pairs[j+1][0]:
+                            raw_video_data, dur, pairs = sve.video_expansion(raw_video_data, pairs, j, dur)
 
                 if len(raw_video_data.shape) > 3:
                     raw_video_data_clip = raw_video_data
@@ -166,9 +166,9 @@ class ShuffleCharadesMeDataloader(Dataset):
                     else:
                         video[i][:slice_len, ...] = video_slice
                 else:
-                    print("video path: {} error. video id: {}, start: {}, end: {}".format(video_path, idx, s, e))
+                    print("video path: {} error. video id: {}, start: {}, end: {}".format(video_path, id, s, e))
         except Exception as excep:
-            print("video path: {} error. video id: {}, start: {}, end: {}, Error: {}".format(video_path, idx, s, e,
+            print("video path: {} error. video id: {}, start: {}, end: {}, Error: {}".format(video_path, id, s, e,
                                                                                              excep))
             raise excep
 
@@ -201,4 +201,4 @@ class ShuffleCharadesMeDataloader(Dataset):
         if self.shuffle_events:
             video, video_mask, segment_num = sve.shuffle_video_events(dat['segment_num'], dat['pair'], video, video_mask, duration)
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
-        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask
+        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, len(dat['sentences'])
