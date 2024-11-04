@@ -6,17 +6,22 @@ import torch
 def process_pairs(segment_num, pairs, duration):
     if segment_num == 0:
         return segment_num, pairs
-    pairs.sort(key=lambda x: x[0])
+    
+    
+    pairs.sort(key=lambda x: x[0])    
+    new_pairs = []
+    
     for pair in pairs:
         if pair[0] >= pair[1] or pair[0] > duration or pair[1] < 0:
-            pairs.remove(pair)
             segment_num -= 1
-        if pair[0] < 0:
-            pair[0] = 0
-        if pair[1] > duration:
-            pair[1] = duration
+            continue
+        
+        start = max(0, pair[0])
+        end = min(duration, pair[1])
 
-    return segment_num, pairs
+        new_pairs.append((start, end))
+    
+    return segment_num, new_pairs
 
 def shuffle_video_events(segment_num, pairs, video, video_mask, duration):
     if segment_num == 0:
@@ -59,9 +64,12 @@ def video_expansion(raw_video, pairs, i, duration):
     new_video = new_video[:end_idx]+ intersection_video + new_video[end_idx:]
     new_duration = duration+intersection_length
 
+    new_pairs = []
+    new_pairs.extend(pairs[:i+1])
     for j in range(i+1, len(pairs)):
-        pairs[j][0] += intersection_length
-        pairs[j][1] += intersection_length
+        new_start = pairs[j][0] + intersection_length
+        new_end = pairs[j][1] + intersection_length
+        new_pairs.append((new_start, new_end))
 
     new_video = torch.tensor(np.stack(new_video))
-    return new_video, new_duration, pairs
+    return new_video, new_duration, new_pairs
