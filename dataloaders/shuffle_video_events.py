@@ -54,7 +54,7 @@ def shuffle_video_events(segment_num, pairs, video, video_mask, duration):
     return new_video, video_mask
 
 def video_expansion(raw_video, pairs, i, duration):
-    new_video = raw_video.numpy().tolist()
+    new_video = raw_video.tolist()
     intersection = (pairs[i+1][0], pairs[i][1])
     intersection_length = intersection[1]-intersection[0]
 
