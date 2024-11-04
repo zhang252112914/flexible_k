@@ -34,7 +34,7 @@ def dataloader_factory(args, tokenizer, logger):
     train_dataloader, train_length, train_sampler = None, 0, None
     if args.do_train:
         # load the data(create corresponding dataloader)
-        if args.shuffle_events:
+        if args.shuffle_exp:
             train_dataloader, train_length, train_sampler = DATALOADER_DICT2[args.datatype]["train"](args, tokenizer)
         else:
             train_dataloader, train_length, train_sampler = DATALOADER_DICT[args.datatype]["train"](args, tokenizer)

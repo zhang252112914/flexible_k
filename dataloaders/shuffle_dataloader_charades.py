@@ -9,8 +9,7 @@ from torch.utils.data import Dataset
 import numpy as np
 import json
 from dataloaders.rawvideo_util import RawVideoExtractor
-from dataloaders.shuffle_video_events import shuffle_video_events
-
+import dataloaders.shuffle_video_events as sve
 
 class ShuffleCharadesMeDataloader(Dataset):
     max_text_per_video = 12
@@ -125,7 +124,7 @@ class ShuffleCharadesMeDataloader(Dataset):
 
         return pairs_text, pairs_mask, group_mask
 
-    def _get_rawvideo(self, video_path, dur, s, e):
+    def _get_rawvideo(self, video_path, dur, s, e, pairs, segment_num):
         video_mask = np.zeros((1, self.max_frames), dtype=np.long)
         max_video_length = [0] * 1
 
@@ -137,6 +136,11 @@ class ShuffleCharadesMeDataloader(Dataset):
             for i in range(1):
                 # Should be optimized by gathering all asking of this video
                 raw_video_data = self.rawVideoExtractor.get_video_data(video_path, dur, s, e)
+
+                if segment_num > 1:
+                    for i in range(segment_num-1):
+                        if pairs[i][1] > pairs[i+1][0]:
+                            raw_video_data, dur, pairs = sve.video_expansion(raw_video_data, pairs, i, dur)
 
                 if len(raw_video_data.shape) > 3:
                     raw_video_data_clip = raw_video_data
@@ -190,7 +194,11 @@ class ShuffleCharadesMeDataloader(Dataset):
         dat = self.dat[item]
         pairs_text, pairs_mask, group_mask = self._get_text(dat['sentences'])
         duration = dat['length']
-        video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration)
-        video, video_mask = shuffle_video_events(dat['segment_num'], dat['pair'], video, video_mask, duration)
+        dat['segment_num'], dat['pair'] = sve.process_pairs(dat['segment_num'], dat['pair'], duration)
+
+        video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration, dat['pair'], dat['segment_num'])
+        
+        if self.shuffle_events:
+            video, video_mask, segment_num = sve.shuffle_video_events(dat['segment_num'], dat['pair'], video, video_mask, duration)
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
         return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask

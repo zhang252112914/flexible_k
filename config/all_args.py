@@ -158,6 +158,8 @@ def get_args(description='Me-Retriever on Retrieval Task'):
 
     parser.add_argument('--shuffle_events', action='store_true', help='shuffle the event or not')
 
+    parser.add_argument('--shuffle_exp', action='store_true', help='Is this a shuffle experiment?')
+
     args = parser.parse_args()
 
     # parameters check and adjust

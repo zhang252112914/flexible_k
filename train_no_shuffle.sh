@@ -11,4 +11,4 @@ main.py --do_train \
 --loose_type --linear_patch 2d --sim_header meanP \
 --pretrained_clip_name ViT-B/32 \
 --post_process none --post_cluster_centroids 16 \
---batch_size 8
+--batch_size 8 --shuffle_exp
