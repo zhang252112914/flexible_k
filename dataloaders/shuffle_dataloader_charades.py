@@ -175,7 +175,7 @@ class ShuffleCharadesMeDataloader(Dataset):
         for i, v_length in enumerate(max_video_length):
             video_mask[i][:v_length] = [1] * v_length
 
-        return video, video_mask
+        return video, video_mask, pairs, segment_num, dur
 
     def _get_vt_mask(self, v_mask, dur, ts, te):
         res = np.zeros((self.max_text_per_video, self.max_frames), dtype=int)
@@ -196,9 +196,10 @@ class ShuffleCharadesMeDataloader(Dataset):
         duration = dat['length']
         dat['segment_num'], dat['pair'] = sve.process_pairs(dat['segment_num'], dat['pair'], duration)
 
-        video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration, dat['pair'], dat['segment_num'])
+        video, video_mask, dat['pairs'], dat['segment_num'], duration = self._get_rawvideo(dat['video'], duration, 0, duration, dat['pair'], dat['segment_num'])
         
         if self.shuffle_events:
-            video, video_mask, segment_num = sve.shuffle_video_events(dat['segment_num'], dat['pair'], video, video_mask, duration)
+            video, video_mask = sve.shuffle_video_events(dat['segment_num'], dat['pair'], video, video_mask, duration)
+        
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
         return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, len(dat['sentences'])
