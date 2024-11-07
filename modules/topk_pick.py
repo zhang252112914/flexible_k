@@ -28,3 +28,26 @@ def pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arr
         frame_indices = frame_indices.sort()[0]  # 排序以保持帧顺序一致
         picked_frames[i, :len(frame_indices)] = frame_indices
     return picked_frames.long()
+
+def get_global_representation(visual_output, video_mask):
+    video_mask_un = video_mask.to(dtype=torch.float).unsqueeze(-1)
+    visual_output = visual_output * video_mask_un
+    video_mask_un_sum = torch.sum(video_mask_un, dim=1, dtype=torch.float)
+    video_mask_un_sum[video_mask_un_sum == 0.] = 1.
+    video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum
+    return video_out
+
+def add_global_info(visual_output, video_mask, global_visual_output, vt_mask):
+    batch_size, num_picked_frames, embedding_dim = visual_output.shape
+    
+    global_visual_output = global_visual_output.unsqueeze(1)  # (batch_size, 1, embedding_dim)
+    updated_visual_output = torch.cat([global_visual_output, visual_output], dim=1)
+    
+    global_mask = torch.ones((batch_size, 1), dtype=video_mask.dtype, device=video_mask.device)
+    updated_video_mask = torch.cat([global_mask, video_mask], dim=1)
+    
+    text_length = vt_mask.shape[2]
+    global_vt_mask = torch.ones((batch_size, 1, text_length), dtype=vt_mask.dtype, device=vt_mask.device)
+    updated_vt_mask = torch.cat([global_vt_mask, vt_mask], dim=1)
+    
+    return updated_visual_output, updated_video_mask, updated_vt_mask

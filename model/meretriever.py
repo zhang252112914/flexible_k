@@ -11,7 +11,7 @@ from modules.module_cross import CrossModel, CrossConfig, Transformer as Transfo
 from modules.util_module import PreTrainedModel, AllGather, CrossEnMulti, CrossEnMulti_unbalanced
 from modules.cluster.fast_kmeans import batch_fast_kmedoids
 from modules.util_module import all_gather_only as allgather
-from modules.topk_pick import pick_frames
+from modules.topk_pick import pick_frames, get_global_representation, add_global_info
 
 
 logger = logging.getLogger(__name__)
@@ -184,11 +184,13 @@ class MeRetriever(MeRetrieverPretrained):
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
+            global_visual_output = get_global_representation(visual_output, video_mask)
             picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num)
             idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
             visual_output = visual_output[idx, picked_frames]
             video_mask = video_mask[idx, picked_frames]
             vt_mask = vt_mask[idx, :, picked_frames].permute(0, 2, 1)
+            visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
 
         if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
@@ -247,6 +249,8 @@ class MeRetriever(MeRetrieverPretrained):
 
         bs_pair = video_mask.size(0)
         visual_hidden = self.clip.encode_image(video, video_frame=video_frame).float()
+        # in forward function the video was reshaped to (b * pair * bs * ts, channel, h, w) for the clip.encode_image
+        # now it change back to batch_size, frames, hidden_size
         visual_hidden = visual_hidden.view(bs_pair, -1, visual_hidden.size(-1))
 
         return visual_hidden
