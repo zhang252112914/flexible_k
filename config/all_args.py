@@ -160,6 +160,8 @@ def get_args(description='Me-Retriever on Retrieval Task'):
 
     parser.add_argument('--shuffle_exp', action='store_true', help='Is this a shuffle experiment?')
 
+    parser.add_argument('--global_info', action='store_true', help='consider global information in topk selection')
+
     args = parser.parse_args()
 
     # parameters check and adjust

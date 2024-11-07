@@ -23,6 +23,7 @@ class MeRetriever(MeRetrieverPretrained):
         self.task_config = task_config
         self.ignore_video_index = -1
         self.logger = logger
+        self.global_info = task_config.global_info
 
         # assert self.task_config.max_words + self.task_config.max_frames <= cross_config.max_position_embeddings
 
@@ -184,13 +185,15 @@ class MeRetriever(MeRetrieverPretrained):
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
-            global_visual_output = get_global_representation(visual_output, video_mask)
+            if self.global_info:
+                global_visual_output = get_global_representation(visual_output, video_mask)
             picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num)
             idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
             visual_output = visual_output[idx, picked_frames]
             video_mask = video_mask[idx, picked_frames]
             vt_mask = vt_mask[idx, :, picked_frames].permute(0, 2, 1)
-            visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
+            if self.global_info:
+                visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
 
         if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
