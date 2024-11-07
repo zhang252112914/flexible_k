@@ -342,7 +342,7 @@ class CLIP(nn.Module):
         super().__init__()
 
         self.context_length = context_length
-
+        # the vision layer is a num, so it will initialize the model as a VisualTransformer
         if isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
             self.visual = ModifiedResNet(
