@@ -35,8 +35,10 @@ def dataloader_factory(args, tokenizer, logger):
     if args.do_train:
         # load the data(create corresponding dataloader)
         if args.shuffle_exp:
+            print("shuffle experiment")
             train_dataloader, train_length, train_sampler = DATALOADER_DICT2[args.datatype]["train"](args, tokenizer)
         else:
+            print("no shuffle experiment")
             train_dataloader, train_length, train_sampler = DATALOADER_DICT[args.datatype]["train"](args, tokenizer)
     
     return train_dataloader, test_dataloader, train_length, test_length, train_sampler
@@ -137,6 +139,7 @@ def dataloader_charades_test(args, tokenizer, subset="test"):
 
 # modified
 def mydataloader_charades_train(args, tokenizer):
+    print("normal dataloader")
     dataset = MyCharadesMeDataloader(
         subset="train",
         data_path=args.data_path,
@@ -160,6 +163,7 @@ def mydataloader_charades_train(args, tokenizer):
     )
     return dataloader, len(dataset), sampler
 def shuffle_dataloader_charades_train(args, tokenizer):
+    print("shuffle dataloader")
     dataset = ShuffleCharadesMeDataloader(
         subset="train",
         data_path=args.data_path,

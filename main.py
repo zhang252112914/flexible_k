@@ -46,8 +46,12 @@ def main():
 
     if args.do_train:
         # training_only preparation
+        print(len(train_dataloader))
+        print(args.gradient_accumulation_steps)
+        print(args.epochs)
         num_train_optimization_steps = (int(len(train_dataloader) + args.gradient_accumulation_steps - 1)
                                         / args.gradient_accumulation_steps) * args.epochs
+        print(num_train_optimization_steps)
         optimizer, scheduler, model = util_func.prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, args.local_rank)
         if args.local_rank == 0:
             logger.info("***** Running training *****")
