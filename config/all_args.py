@@ -21,7 +21,7 @@ def get_args(description='Me-Retriever on Retrieval Task'):
     parser.add_argument('--num_thread_reader', type=int, default=1, help='')
     parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
     parser.add_argument('--loss', type=str, default='balanced', help='loss function used')
-    parser.add_argument('--epochs', type=int, default=6, help='upper epoch limit')
+    parser.add_argument('--epochs', type=int, default=20, help='upper epoch limit')
     parser.add_argument('--batch_size', type=int, default=256, help='batch size')
    
     # evaluation batch size is uasually larger than training batch size
