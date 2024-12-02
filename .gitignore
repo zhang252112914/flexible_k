@@ -8,3 +8,5 @@ __pycache__/
 /output_origin/
 /output_globalk/
 /output_debug/
+/output_one/
+/output_shuffle_lstm/

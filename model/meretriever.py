@@ -151,6 +151,7 @@ class MeRetriever(MeRetrieverPretrained):
         self.regularization = getattr(task_config, "regularize", "none")
         self.multi2multi = (self.sim_header == 'maxP')
         self.post_process = getattr(task_config, 'post_process', 'none')
+        self.onlyone = task_config.onlyone
 
         self.apply(self.init_weights)
 
@@ -176,22 +177,62 @@ class MeRetriever(MeRetrieverPretrained):
             batch_size = text.shape[0]
             K = self.task_config.K
             pick_arrangement = []
-            for i in range(batch_size):
-                frame_per_sentence = K // sentence_num[i]
-                reminder = K % sentence_num[i]
-                arrangement = [frame_per_sentence] * sentence_num[i]
-                arrangement[-1] += reminder
-                pick_arrangement.append(arrangement)
+            if(self.onlyone):
+                for i in range(batch_size):
+                    pick_arrangement = [[1] * s for s in sentence_num]
+            else:
+                for i in range(batch_size):
+                    frame_per_sentence = K // sentence_num[i]
+                    reminder = K % sentence_num[i]
+                    arrangement = [frame_per_sentence] * sentence_num[i]
+                    arrangement[-1] += reminder
+                    pick_arrangement.append(arrangement)
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
             if self.global_info:
                 global_visual_output = get_global_representation(visual_output, video_mask)
-            picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num)
+            
+            picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone)
+            
+
             idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
-            visual_output = visual_output[idx, picked_frames]
-            video_mask = video_mask[idx, picked_frames]
-            vt_mask = vt_mask[idx, :, picked_frames].permute(0, 2, 1)
+            # print(picked_frames) //according to the print, it seems no problem here
+            mask_invalid = picked_frames == -1
+            picked_frames_clamped = picked_frames.clone()
+            picked_frames_clamped[mask_invalid] = 0
+
+            # visual_output 和 video_mask 经过print 检查都没有问题
+            visual_output = visual_output[idx, picked_frames_clamped]
+            visual_output[mask_invalid] = 0
+
+            video_mask = video_mask[idx, picked_frames_clamped]
+            video_mask[mask_invalid] = 0
+
+            # print(visual_output) visual_output也没什么问题
+            # print(video_mask) 打印出来看也没有什么问题
+
+            picked_frames_clamped = picked_frames_clamped.unsqueeze(1)  # (batch_size, 1, K)
+            vt_mask = vt_mask.gather(2, picked_frames_clamped.expand(-1, vt_mask.size(1), -1))  # (batch_size, num_time_steps, K)
+            mask_invalid = mask_invalid.unsqueeze(1).expand(-1, vt_mask.size(1), -1)  # (batch_size, num_time_steps, K)
+            vt_mask[mask_invalid] = 0
+            #print(picked_frames_clamped)
+            #print(video_mask)
+            #print(visual_output)
+            # print(picked_frames_clamped.shape)
+            # print(picked_frames_clamped)
+            # print(video_mask)
+            # print(visual_output)
+            # print(vt_mask.shape)
+            # print(vt_mask)
+            
+            
+
+            # idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
+            # visual_output = visual_output[idx, picked_frames]
+            # video_mask = video_mask[idx, picked_frames]
+            # vt_mask = vt_mask[idx, :, picked_frames].permute(0, 2, 1)
+
             if self.global_info:
                 visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
 
@@ -296,10 +337,10 @@ class MeRetriever(MeRetrieverPretrained):
 
     def _mean_pooling_for_similarity_visual(self, visual_output, video_mask, ):
         video_mask_un = video_mask.to(dtype=torch.float).unsqueeze(-1)
-        visual_output = visual_output * video_mask_un
+        visual_output = visual_output * video_mask_un    #1
         video_mask_un_sum = torch.sum(video_mask_un, dim=1, dtype=torch.float)
         video_mask_un_sum[video_mask_un_sum == 0.] = 1.
-        video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum
+        video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum   #2
         return video_out
     
     def _mean_pooling_for_similarity(self, sequence_output, visual_output, attention_mask, video_mask, ):

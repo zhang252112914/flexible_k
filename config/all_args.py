@@ -156,6 +156,8 @@ def get_args(description='Me-Retriever on Retrieval Task'):
     # added arg
     parser.add_argument('--K', type=int, default=16, help='The sum of frames will be chosen.')
 
+    parser.add_argument('--onlyone', action='store_true', help='when we take the topk method, it means it will only take one frame per sentence')
+
     parser.add_argument('--shuffle_events', action='store_true', help='shuffle the event or not')
 
     parser.add_argument('--shuffle_exp', action='store_true', help='Is this a shuffle experiment?')

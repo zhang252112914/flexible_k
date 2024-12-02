@@ -1,5 +1,5 @@
 CUDA_VISIBLE_DEVICES=6,3,4,5 torchrun --nproc_per_node=4 \
---master_port=53198 \
+--master_port=56198 \
 main.py --do_train \
 --num_thread_reader=2 \
 --data_path /home/zyl/MeVTR_data_and_models/charades/annotation \
@@ -11,4 +11,4 @@ main.py --do_train \
 --loose_type --linear_patch 2d --sim_header meanP \
 --pretrained_clip_name ViT-B/32 \
 --post_process topk --post_cluster_centroids 16 \
---batch_size 16
+--batch_size 16 --onlyone

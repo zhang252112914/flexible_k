@@ -46,9 +46,6 @@ def main():
 
     if args.do_train:
         # training_only preparation
-        print(len(train_dataloader))
-        print(args.gradient_accumulation_steps)
-        print(args.epochs)
         num_train_optimization_steps = (int(len(train_dataloader) + args.gradient_accumulation_steps - 1)
                                         / args.gradient_accumulation_steps) * args.epochs
         print(num_train_optimization_steps)
