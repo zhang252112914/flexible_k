@@ -10,3 +10,4 @@ __pycache__/
 /output_debug/
 /output_one/
 /output_shuffle_lstm/
+/output_expand_lstm/
