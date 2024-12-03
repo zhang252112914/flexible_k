@@ -143,6 +143,7 @@ class MeRetriever(MeRetrieverPretrained):
                                        batch_first=True, bidirectional=False, num_layers=1)
 
         # self.loss_fct = CrossEn()
+        # the default loss function is balanced
         if getattr(task_config, "loss", "balanced") == "unbalanced":
             self.loss_fct = CrossEnMulti_unbalanced()
         else:
@@ -221,8 +222,8 @@ class MeRetriever(MeRetrieverPretrained):
             #print(visual_output)
             # print(picked_frames_clamped.shape)
             # print(picked_frames_clamped)
-            # print(video_mask)
-            # print(visual_output)
+            #print(video_mask)
+            #print(visual_output)
             # print(vt_mask.shape)
             # print(vt_mask)
             
@@ -266,6 +267,8 @@ class MeRetriever(MeRetrieverPretrained):
             sim_loss = self.loss_fct(sim_matrix, sim_mask)
             sim_loss2 = self.loss_fct(sim_matrix.T, sim_mask.T)
             reg_loss = None
+
+            # print("pass loss calculation")
 
             return sim_loss, sim_loss2, reg_loss
         else:
@@ -337,7 +340,7 @@ class MeRetriever(MeRetrieverPretrained):
 
     def _mean_pooling_for_similarity_visual(self, visual_output, video_mask, ):
         video_mask_un = video_mask.to(dtype=torch.float).unsqueeze(-1)
-        visual_output = visual_output * video_mask_un    #1
+        visual_output = visual_output * video_mask_un    # just ensure the invalid vector is all-zero
         video_mask_un_sum = torch.sum(video_mask_un, dim=1, dtype=torch.float)
         video_mask_un_sum[video_mask_un_sum == 0.] = 1.
         video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum   #2
@@ -391,9 +394,12 @@ class MeRetriever(MeRetrieverPretrained):
             # noinspection PyUnresolvedReferences
             torch.distributed.barrier()
 
-        # the visual_output and video_mask are reshaped to the same shape
-        visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
+        # because the last dimension of the visual_output holds some all-zero vector, which means the visual_output.norm will contain 0 in the last dimension and this will be applied to the divison, and that's a disaster!
+        norms = visual_output.norm(dim=-1, keepdim=True)
+        norms = norms + (norms == 0).float()
+        visual_output = visual_output / norms   # visual_output.norm(dim=-1, keepdim=True)
         visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask)
+        # the mean_pooling didn't generate nan
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
 
         sequences = []
@@ -406,10 +412,15 @@ class MeRetriever(MeRetrieverPretrained):
             temp[:, i] = 1
             sequence_mask.append(temp)
 
+        # print("pass the sequence process")
+
         sequence_output = torch.concat(sequences)
         sequence_mask = torch.concat(sequence_mask)
         logit_scale = self.clip.logit_scale.exp()
         retrieve_logits = logit_scale * torch.matmul(sequence_output, visual_output.t())
+        
+        # print("pass the similarity calculation")
+
         return retrieve_logits, sequence_mask
     
     def _cross_similarity(self, sequence_output, visual_output, attention_mask, video_mask, group_mask):

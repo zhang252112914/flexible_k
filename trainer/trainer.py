@@ -68,8 +68,12 @@ class Trainer(BaseTrainer):
                 loss = loss1 + args.alpha * loss2
             else:
                 loss = loss1 + args.alpha * loss2 + args.reg_lambda * reg_loss
+            # the loss is a nan
             if torch.isnan(loss):
-                print(loss1, loss2, reg_loss)
+                #print(loss1, loss2, reg_loss)
+                #print("loss1: ", loss1)
+                # print("loss2: ", loss2)
+                # print("reg_loss: ", reg_loss)
                 raise ValueError
             
             if args.dynamic_alpha:
