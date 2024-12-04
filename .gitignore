@@ -11,3 +11,5 @@ __pycache__/
 /output_one/
 /output_shuffle_lstm/
 /output_expand_lstm/
+/output_expand_seqtran/
+/output_xpool/
