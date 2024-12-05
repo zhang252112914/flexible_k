@@ -1,0 +1,1 @@
+对于xpool，没有单独实现一个dataloader了，而是直接用前面的dataloader，然后设置参数去取16帧作为初始的输入
