@@ -13,3 +13,4 @@ __pycache__/
 /output_expand_lstm/
 /output_expand_seqtran/
 /output_xpool/
+/output_topk_event/

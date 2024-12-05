@@ -198,41 +198,21 @@ class MeRetriever(MeRetrieverPretrained):
             
 
             idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
-            # print(picked_frames) //according to the print, it seems no problem here
+
             mask_invalid = picked_frames == -1
             picked_frames_clamped = picked_frames.clone()
             picked_frames_clamped[mask_invalid] = 0
 
-            # visual_output 和 video_mask 经过print 检查都没有问题
             visual_output = visual_output[idx, picked_frames_clamped]
             visual_output[mask_invalid] = 0
 
             video_mask = video_mask[idx, picked_frames_clamped]
             video_mask[mask_invalid] = 0
 
-            # print(visual_output) visual_output也没什么问题
-            # print(video_mask) 打印出来看也没有什么问题
-
             picked_frames_clamped = picked_frames_clamped.unsqueeze(1)  # (batch_size, 1, K)
             vt_mask = vt_mask.gather(2, picked_frames_clamped.expand(-1, vt_mask.size(1), -1))  # (batch_size, num_time_steps, K)
             mask_invalid = mask_invalid.unsqueeze(1).expand(-1, vt_mask.size(1), -1)  # (batch_size, num_time_steps, K)
             vt_mask[mask_invalid] = 0
-            #print(picked_frames_clamped)
-            #print(video_mask)
-            #print(visual_output)
-            # print(picked_frames_clamped.shape)
-            # print(picked_frames_clamped)
-            #print(video_mask)
-            #print(visual_output)
-            # print(vt_mask.shape)
-            # print(vt_mask)
-            
-            
-
-            # idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
-            # visual_output = visual_output[idx, picked_frames]
-            # video_mask = video_mask[idx, picked_frames]
-            # vt_mask = vt_mask[idx, :, picked_frames].permute(0, 2, 1)
 
             if self.global_info:
                 visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
