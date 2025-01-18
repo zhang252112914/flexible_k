@@ -156,7 +156,7 @@ class MeRetriever(MeRetrieverPretrained):
 
         self.apply(self.init_weights)
 
-    def forward(self, text, text_mask, group_mask, video, sentence_num=1,video_mask=None, vt_mask=None):
+    def forward(self, text, text_mask, group_mask, video, ranges, sentence_num=1,video_mask=None, vt_mask=None):
         video_mask = video_mask.view(-1, video_mask.shape[-1])
 
         # T x 3 x H x W
@@ -194,7 +194,7 @@ class MeRetriever(MeRetrieverPretrained):
             if self.global_info:
                 global_visual_output = get_global_representation(visual_output, video_mask)
             
-            picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone)
+            picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone, ranges=ranges)
             
 
             idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
@@ -321,10 +321,10 @@ class MeRetriever(MeRetrieverPretrained):
     def _mean_pooling_for_similarity_visual(self, visual_output, video_mask, ):
         video_mask_un = video_mask.to(dtype=torch.float).unsqueeze(-1)
         visual_output = visual_output * video_mask_un    # just ensure the invalid vector is all-zero
-        video_mask_un_sum = torch.sum(video_mask_un, dim=1, dtype=torch.float)
+        video_mask_un_sum = torch.sum(video_mask_un, dim=1, dtype=torch.float) # calculate the number of valid frames
         video_mask_un_sum[video_mask_un_sum == 0.] = 1.
         video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum   #2
-        return video_out
+        return video_out # output's shape is (btch_size, embed_dim)
     
     def _mean_pooling_for_similarity(self, sequence_output, visual_output, attention_mask, video_mask, ):
         text_out = self._mean_pooling_for_similarity_sequence(sequence_output, attention_mask)

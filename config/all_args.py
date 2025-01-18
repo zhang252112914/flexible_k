@@ -164,6 +164,8 @@ def get_args(description='Me-Retriever on Retrieval Task'):
 
     parser.add_argument('--global_info', action='store_true', help='consider global information in topk selection')
 
+    parser.add_argument("--fps", type=int, default=3, help="the fps of the source video")
+
     args = parser.parse_args()
 
     # parameters check and adjust

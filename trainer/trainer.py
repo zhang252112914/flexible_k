@@ -61,9 +61,9 @@ class Trainer(BaseTrainer):
                 batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
 
             #modified
-            input_ids, input_mask, group_mask, video, video_mask, vt_mask, sentence_num = batch
+            input_ids, input_mask, group_mask, video, video_mask, vt_mask, sentence_num, ranges = batch
             
-            loss1, loss2, reg_loss = model(input_ids, input_mask, group_mask, video, sentence_num, video_mask, vt_mask)
+            loss1, loss2, reg_loss = model(input_ids, input_mask, group_mask, video, ranges, sentence_num, video_mask, vt_mask)
             if args.regularize == 'none':
                 loss = loss1 + args.alpha * loss2
             else:

@@ -9,7 +9,9 @@ import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
 import json
+import torch
 from dataloaders.rawvideo_util import RawVideoExtractor
+import math
 
 class MyCharadesMeDataloader(Dataset):
     max_text_per_video = 12
@@ -26,12 +28,14 @@ class MyCharadesMeDataloader(Dataset):
             image_resolution=224,
             frame_order=0,
             slice_framepos=0,
+            fps=3
     ):
         self.data_path = data_path
         self.features_path = features_path
         self.max_words = max_words
         self.max_frames = max_frames
         self.tokenizer = tokenizer
+        self.fps = fps
         # 0: ordinary order; 1: reverse order; 2: random order.
         self.frame_order = frame_order
         assert self.frame_order in [0, 1, 2]
@@ -178,18 +182,62 @@ class MyCharadesMeDataloader(Dataset):
             temp[frame_time > end] = 0
             res[k, :n_frames] = temp
         return res
+    
+    # 检查原有的视频，对应事件是否能够产生足够数量的帧
+    def check_and_expand_events(self, length, starts, ends):
+        n = len(starts)
+        total_duration = 0 #total_duration is the total number of seconds
+        for i in range(n):
+            total_duration += (ends[i] - starts[i])
+        
+        valid_rate = total_duration / length if length*self.fps > 16 else total_duration*self.fps / 64
+        if valid_rate*64 >= 16:
+            return starts, ends
+        
+        else:
+            sum_increment = (0.25 - valid_rate) * length if self.fps*length > 64 else math.ceil((16-total_duration*self.fps) / self.fps) # sum_increment是总共要增加的秒数
 
+            for i in range(n):
+
+                increment = math.ceil(sum_increment * (ends[i] - starts[i]) / total_duration) # 按照不同event的占比划分increment
+                half_increment = increment / 2
+                if starts[i] - half_increment >= 0 and ends[i] + half_increment <= length:
+                    starts[i] = math.floor(starts[i] - half_increment)
+                    ends[i] = math.ceil(ends[i] + half_increment)
+                elif starts[i] - half_increment < 0: 
+                    ends[i] = math.ceil(ends[i] + increment - starts[i])
+                    starts[i] = 0
+                else: 
+                    starts[i] = math.floor(starts[i] - increment + (length - ends[i]))
+                    ends[i] = length
+
+            return starts, ends
+
+
+    def generate_event_range(self, length, starts, ends):
+        n = len(starts)
+        k = self.max_text_per_video
+        ranges = torch.zeros((k, 2), dtype=torch.long)
+        for i in range(n):
+            start_p = max(0, starts[i])
+            end_p = min(length, ends[i])
+
+            # add a step to check if the range of event can generate enough frames
+            start = math.floor(start_p * self.max_frames / length)
+            end = math.ceil(end_p * self.max_frames / length)
+            ranges[i] = torch.tensor([start, end])
+        return ranges
+    
     def __getitem__(self, item):
         dat = self.dat[item]
-        # pair_text = np.zeros((sentence_num, self.max_words), dtype=np.long)
-        # pair_mask = np.zeros((sentence_num, self.max_words), dtype=np.long)
-        # group_mask = np.zeros((sentence_num,), dtype=np.long)
         pairs_text, pairs_mask, group_mask, sentence_num = self._get_text(dat['sentences'])
         duration = dat['length']
+        dat['start'], dat['end'] = self.check_and_expand_events(duration, dat['start'], dat['end'])
         #below the _get_rawvideo's first parameter duration means length and 0 means start time, second duration means end time 
         video, video_mask = self._get_rawvideo(dat['video'], duration, 0, duration)
         #vt_mask means video-text mask
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
         # pairs_text = (sentence_num, max_words)
         # video = (1, max_frames, 1, 3, H, W) I don't know why the third dimension is 1(maybe it represent the number of segment in a video, but it is ignored now)
-        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, sentence_num
+        ranges = self.generate_event_range(duration, dat['start'], dat['end'])
+        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, sentence_num, ranges

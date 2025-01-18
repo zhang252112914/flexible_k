@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional  as F
 
 
-def pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone,similarity_metric='cosine'):
+def pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone, ranges, similarity_metric='cosine'):
     
     batch_size, max_sentence_per_video, embedding_dim = sequence_output.shape
     _, num_frames, video_embedding_dim = visual_output.shape
@@ -17,12 +17,33 @@ def pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arr
         for j in range(max_sentence_per_video):
             if group_mask[i][j] == 0:
                 continue
+            # k是安排的帧数，K是总共的帧数（是一个参数）
             k = pick_arrangement[i][n]
             n += 1
             sentence_embedding = sequence_output[i, j].unsqueeze(0)
-            frame_embeddings = visual_output[i][video_mask[i] == 1]
+            start, end = ranges[i][j]
+
+            # 检查对应区域是否具有足够的帧数
+            # 检查两次的必要性在于，第二次是避免舍入造成的帧数不足
+
+            duration = end - start
+            if duration < min(K, k):
+                make_up = min(K, k) - duration
+                new_start = max(0, start - make_up)
+                if new_start == 0:
+                    end = min(num_frames, end + make_up - start)
+                    start = 0
+                else:
+                    start = new_start
+
+            #print (start - end, min(k, K))
+
+            frame_embeddings = visual_output[i][start:end]
+            frame_mask = video_mask[i][start:end]
+            frame_embeddings = frame_embeddings[frame_mask == 1]
             similarity = F.cosine_similarity(sentence_embedding, frame_embeddings, dim=1)
-            top_k_indices = similarity.topk(min(K, k), largest=True).indices
+
+            top_k_indices = similarity.topk(min(K, k), largest=True).indices + start
             frame_indices.append(top_k_indices)
         frame_indices = torch.cat(frame_indices)[:K]
         frame_indices = frame_indices.sort()[0]  # 排序以保持帧顺序一致

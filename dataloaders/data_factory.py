@@ -162,6 +162,7 @@ def mydataloader_charades_train(args, tokenizer):
         drop_last=True,
     )
     return dataloader, len(dataset), sampler
+
 def shuffle_dataloader_charades_train(args, tokenizer):
     print("shuffle dataloader")
     dataset = ShuffleCharadesMeDataloader(
