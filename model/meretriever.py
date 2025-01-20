@@ -12,6 +12,7 @@ from modules.util_module import PreTrainedModel, AllGather, CrossEnMulti, CrossE
 from modules.cluster.fast_kmeans import batch_fast_kmedoids
 from modules.util_module import all_gather_only as allgather
 from modules.topk_pick import pick_frames, get_global_representation, add_global_info
+from modules.xpool.transformer import Transformer
 
 
 logger = logging.getLogger(__name__)
@@ -154,6 +155,10 @@ class MeRetriever(MeRetrieverPretrained):
         self.post_process = getattr(task_config, 'post_process', 'none')
         self.onlyone = task_config.onlyone
 
+        # if the selection method is xpool, then initialize the model
+        if self.post_process == 'xpool':
+            self.xpool_frame = Transformer(task_config)
+
         self.apply(self.init_weights)
 
     def forward(self, text, text_mask, group_mask, video, ranges, sentence_num=1,video_mask=None, vt_mask=None):
@@ -236,6 +241,12 @@ class MeRetriever(MeRetrieverPretrained):
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
+        
+        if self.post_process == 'xpool':
+            sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
+                                                                         video, video_mask, group_mask, shaped=True,
+                                                                         video_frame=video_frame)
+            visual_output = self.xpool_frame(sequence_output, visual_output, group_mask)
 
         if self.training:
             if self.multi2multi:
@@ -263,7 +274,7 @@ class MeRetriever(MeRetrieverPretrained):
                                                                          sequence_hidden.shape[1]).to(text.device)))
             res.append(sequence_hidden)
         ret = torch.stack(res)
-        return ret
+        return ret # (batch_size, max_text_per_video, embed_dim)
 
     def get_visual_output(self, video, video_mask, shaped=False, video_frame=-1):
         if shaped is False:
@@ -280,7 +291,7 @@ class MeRetriever(MeRetrieverPretrained):
         # now it change back to batch_size, frames, hidden_size
         visual_hidden = visual_hidden.view(bs_pair, -1, visual_hidden.size(-1))
 
-        return visual_hidden
+        return visual_hidden  # (batch_size, frames, hidden_size)
 
 
     def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1):
@@ -323,7 +334,7 @@ class MeRetriever(MeRetrieverPretrained):
         visual_output = visual_output * video_mask_un    # just ensure the invalid vector is all-zero
         video_mask_un_sum = torch.sum(video_mask_un, dim=1, dtype=torch.float) # calculate the number of valid frames
         video_mask_un_sum[video_mask_un_sum == 0.] = 1.
-        video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum   #2
+        video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum
         return video_out # output's shape is (btch_size, embed_dim)
     
     def _mean_pooling_for_similarity(self, sequence_output, visual_output, attention_mask, video_mask, ):

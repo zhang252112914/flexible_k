@@ -67,7 +67,7 @@ def get_args(description='Me-Retriever on Retrieval Task'):
     parser.add_argument("--task_type", default="retrieval", type=str, help="Point the task `retrieval` to finetune.")
     parser.add_argument("--datatype", default="msrvtt", type=str, help="Point the dataset to finetune.")
     parser.add_argument("--sim_lambda", default=0.0, type=float, help="The coefficient of added similarity term")
-    parser.add_argument('--post_process', type=str, default='none', choices=['none', 'cluster', 'topk'],
+    parser.add_argument('--post_process', type=str, default='none', choices=['none', 'cluster', 'topk', 'xpool'],
                         help="clustering over frames")
     parser.add_argument('--post_cluster_centroids', type=int, default=1, help='clustering frame length')
 
@@ -154,17 +154,30 @@ def get_args(description='Me-Retriever on Retrieval Task'):
                         help="whether do l2 normalization before clustering.")
     
     # added arg
-    parser.add_argument('--K', type=int, default=16, help='The sum of frames will be chosen.')
 
-    parser.add_argument('--onlyone', action='store_true', help='when we take the topk method, it means it will only take one frame per sentence')
+    #================== temporal shuffle related ==================
 
     parser.add_argument('--shuffle_events', action='store_true', help='shuffle the event or not')
 
     parser.add_argument('--shuffle_exp', action='store_true', help='Is this a shuffle experiment? yes, then expand')
 
+    #================== topk related ==================
+
+    parser.add_argument('--K', type=int, default=16, help='The sum of frames will be chosen.')
+
+    parser.add_argument('--onlyone', action='store_true', help='when we take the topk method, it means it will only take one frame per sentence')
+
     parser.add_argument('--global_info', action='store_true', help='consider global information in topk selection')
 
     parser.add_argument("--fps", type=int, default=3, help="the fps of the source video")
+    
+    #================== xpool related ==================
+    parser.add_argument("--num_mha_heads", type=int, default=1, help="the number of heads in the xpool module")
+
+    parser.add_argument("--transformer_dropout", type=float, default=0.3, help="the dropout rate in the xpool module")
+
+    parser.add_argument("--embed_dim", type=int, default=512, help="the embedding dimension in the xpool module(actually is defined by the clip)")
+
 
     args = parser.parse_args()
 
