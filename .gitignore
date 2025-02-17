@@ -14,6 +14,7 @@ __pycache__/
 /output_expand_seqtran/
 /output_xpool/
 /output_topk_event/
+/output_topk_event_global/
 /output_topk_global/
-/output_xpool_visual/
-/output_xpool_eval/
+/output_topk/
+/output_bz64/

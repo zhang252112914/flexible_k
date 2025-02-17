@@ -11,7 +11,8 @@ from modules.module_cross import CrossModel, CrossConfig, Transformer as Transfo
 from modules.util_module import PreTrainedModel, AllGather, CrossEnMulti, CrossEnMulti_unbalanced
 from modules.cluster.fast_kmeans import batch_fast_kmedoids
 from modules.util_module import all_gather_only as allgather
-from modules.topk_pick import pick_frames, get_global_representation, add_global_info
+from modules.topk_pick_event import pick_frames_event, get_global_representation, add_global_info
+from modules.topk_pick import pick_frames
 from modules.xpool.transformer import Transformer
 
 
@@ -179,7 +180,7 @@ class MeRetriever(MeRetrieverPretrained):
             vt_mask = self.get_interval_after_cluster(group_mask, vt_mask)
 
         #modified
-        if self.post_process == 'topk':
+        if self.post_process == 'topk_event':
             batch_size = text.shape[0]
             K = self.task_config.K
             pick_arrangement = []
@@ -199,7 +200,7 @@ class MeRetriever(MeRetrieverPretrained):
             if self.global_info:
                 global_visual_output = get_global_representation(visual_output, video_mask)
             
-            picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone, ranges=ranges)
+            picked_frames = pick_frames_event(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone, ranges=ranges)
             
 
             idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
@@ -247,6 +248,47 @@ class MeRetriever(MeRetrieverPretrained):
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
             visual_output = self.xpool_frame(sequence_output, visual_output, group_mask)
+        
+        if self.post_process == 'topk':
+            batch_size = text.shape[0]
+            K = self.task_config.K
+            pick_arrangement = []
+            if(self.onlyone):
+                for i in range(batch_size):
+                    pick_arrangement = [[1] * s for s in sentence_num]
+            else:
+                for i in range(batch_size):
+                    frame_per_sentence = K // sentence_num[i]
+                    reminder = K % sentence_num[i]
+                    arrangement = [frame_per_sentence] * sentence_num[i]
+                    arrangement[-1] += reminder
+                    pick_arrangement.append(arrangement)
+            sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
+                                                                         video, video_mask, group_mask, shaped=True,
+                                                                         video_frame=video_frame)
+            if self.global_info:
+                global_visual_output = get_global_representation(visual_output, video_mask)
+            
+            picked_frames = pick_frames(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone)
+            idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
+
+            mask_invalid = picked_frames == -1
+            picked_frames_clamped = picked_frames.clone()
+            picked_frames_clamped[mask_invalid] = 0
+
+            visual_output = visual_output[idx, picked_frames_clamped]
+            visual_output[mask_invalid] = 0
+
+            video_mask = video_mask[idx, picked_frames_clamped]
+            video_mask[mask_invalid] = 0
+
+            picked_frames_clamped = picked_frames_clamped.unsqueeze(1)  # (batch_size, 1, K)
+            vt_mask = vt_mask.gather(2, picked_frames_clamped.expand(-1, vt_mask.size(1), -1))  # (batch_size, num_time_steps, K)
+            mask_invalid = mask_invalid.unsqueeze(1).expand(-1, vt_mask.size(1), -1)  # (batch_size, num_time_steps, K)
+            vt_mask[mask_invalid] = 0
+
+            if self.global_info:
+                visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
 
         if self.training:
             if self.multi2multi:

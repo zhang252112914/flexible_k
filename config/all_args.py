@@ -67,7 +67,7 @@ def get_args(description='Me-Retriever on Retrieval Task'):
     parser.add_argument("--task_type", default="retrieval", type=str, help="Point the task `retrieval` to finetune.")
     parser.add_argument("--datatype", default="msrvtt", type=str, help="Point the dataset to finetune.")
     parser.add_argument("--sim_lambda", default=0.0, type=float, help="The coefficient of added similarity term")
-    parser.add_argument('--post_process', type=str, default='none', choices=['none', 'cluster', 'topk', 'xpool'],
+    parser.add_argument('--post_process', type=str, default='none', choices=['none', 'cluster', 'topk', 'xpool', 'topk_event'],
                         help="clustering over frames")
     parser.add_argument('--post_cluster_centroids', type=int, default=1, help='clustering frame length')
 
