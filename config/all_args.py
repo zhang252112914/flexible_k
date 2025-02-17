@@ -178,6 +178,10 @@ def get_args(description='Me-Retriever on Retrieval Task'):
 
     parser.add_argument("--embed_dim", type=int, default=512, help="the embedding dimension in the xpool module(actually is defined by the clip)")
 
+    parser.add_argument("--xpool_visualize", action='store_true', help="visualize the attention map")
+
+    parser.add_argument("--xpool_visualize_dir", type=str, default='/home/zyl/flexible/xpool_visual', help="the directory to save the attention map")
+
 
     args = parser.parse_args()
 

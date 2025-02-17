@@ -4,7 +4,7 @@ main.py --do_train \
 --num_thread_reader=2 \
 --data_path /home/zyl/MeVTR_data_and_models/charades/annotation \
 --features_path /home/zyl/MeVTR_data_and_models/charades/Charades_v2_3 \
---output_dir /home/zyl/flexible_k/output_xpool \
+--output_dir /home/zyl/flexible_k/output_xpool_eval \
 --max_words 77 --max_frames 64 --batch_size_val 16 \
 --datatype charades --feature_framerate 1 --coef_lr 1e-4 \
 --slice_framepos 2 \

@@ -74,6 +74,8 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu, logger):
             elif args.post_process == 'perceiver':
                 visual_output = model.perceiver_sampler(visual_output, video_mask)
                 video_mask = torch.ones(visual_output.shape[0], visual_output.shape[1]).to(visual_output.device)
+            elif args.post_process == 'xpool':
+                visual_output = model.xpool_frame(sequence_output, visual_output, group_mask)
 
             batch_sequence_output_list.append((sequence_output, bid))
             batch_list_t.append((input_mask, group_mask,))

@@ -389,7 +389,7 @@ class MeRetriever(MeRetrieverPretrained):
         norms = visual_output.norm(dim=-1, keepdim=True)
         norms = norms + (norms == 0).float()
         visual_output = visual_output / norms   # visual_output.norm(dim=-1, keepdim=True)
-        visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask)
+        visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask) # visual_output is the shape(batch_size, embed_dim)
         # the mean_pooling didn't generate nan
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
 

@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 class MultiHeadedAttention(nn.Module):
     def __init__(self, config):
@@ -10,6 +11,11 @@ class MultiHeadedAttention(nn.Module):
         self.num_heads = config.num_mha_heads
         assert self.embed_dim % self.num_heads == 0
         self.head_dim = self.embed_dim // self.num_heads
+        
+        self.visualize = config.xpool_visualize
+        self.counter = 0
+        self.pic_id = 0
+        self.save_dir = config.xpool_visualize_dir
         
         self.q_proj = nn.Linear(self.embed_dim, self.embed_dim)
         self.k_proj = nn.Linear(self.embed_dim, self.embed_dim)
@@ -44,15 +50,40 @@ class MultiHeadedAttention(nn.Module):
         attention_weights = F.softmax(attention_logits, dim=-1)  # batch_size x num_heads x num_frames x num_texts
 
         attention_weights = attention_weights * text_mask.unsqueeze(1).unsqueeze(1) # batch_size x 1 x 1 x num_texts
-        # Normalize attention weights (to handle cases where the mask may zero out all weights)
-        attention_weights = attention_weights / attention_weights.sum(dim=-1, keepdim=True)
+        if self.visualize and self.counter % 10 == 0:
+            self.save_attention_weights(attention_weights)
+            self.pic_id += 1
+        self.counter += 1
+        
         attention_weights = attention_weights.permute(0,2,1,3) # batch_size x num_frames x num_heads x num_texts
 
         attention = v @ attention_weights # batch_size x num_frames x head_dim x num_texts
-        attention = attention.mean(dim=-1) # batch_size x num_frames x head_dim
-        
+        valid = text_mask.unsqueeze(1).unsqueeze(1).sum(dim=-1) # batch_size x 1 x 1
+        attention = attention.sum(dim=-1) / valid # batch_size x num_frames x head_dim
+        #attention = attention.mean(dim=-1) # batch_size x num_frames x head_dim
+
         o = self.out_proj(attention)
         return o
+
+    
+    def save_attention_weights(self, attention_weights):
+        """Save attention weights as images to the disk"""
+        # Assuming batch_size = 1 for visualization
+        attention_weights = attention_weights.squeeze(1)  # remove head_dim
+        attention_weights = attention_weights[0].cpu().detach()  # select the first batch
+    
+        fig, ax = plt.subplots(figsize=(5, 10))
+
+        ax.imshow(attention_weights.cpu().detach().numpy(), cmap='viridis', aspect='auto')
+        ax.set_title(f'Attention Weights')
+        ax.set_xlabel('Texts')
+        ax.set_ylabel('Frame Indices')
+
+        # Save image to file with a unique name based on the forward call count
+        image_path = f"{self.save_dir}/attention_weights_{self.pic_id}.png"
+        plt.tight_layout()
+        plt.savefig(image_path)
+        plt.close(fig)
 
 
 class Transformer(nn.Module):
