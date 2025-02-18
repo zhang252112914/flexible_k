@@ -1,5 +1,5 @@
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 \
---master_port=54198 \
+--master_port=55198 \
 main.py --do_eval \
 --num_thread_reader=2 \
 --data_path /home/zyl/MeVTR_data_and_models/charades/annotation \
