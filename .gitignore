@@ -18,6 +18,9 @@ __pycache__/
 /output_topk_global/
 /output_topk/
 /output_topk_event_global64/
+/output_topk_event64/
+/output_topk_global64/
+/output_topk64/
 /output_xpool_visual/
 /output_xpool_eval/
 /output_base/
