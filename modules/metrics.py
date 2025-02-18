@@ -9,11 +9,13 @@ import torch
 
 
 def compute_metrics_together(sim_matrix, mask):
+    # v2t
     ind_gt = mask
     ind_sort = np.argsort(np.argsort(-sim_matrix)) + 1
     ind_mask = np.ma.array(ind_gt * ind_sort, mask=ind_gt == 0)
     # ind_mask = ind_mask.masked_fill(ind_mask == 0, 1000000000)
 
+    #t2v
     ind_gt_t = ind_gt.T
     ind_sort_t = np.argsort(np.argsort(-sim_matrix.T)) + 1
     ind_mask_t = np.ma.array(ind_gt_t * ind_sort_t, mask=ind_gt_t == 0)

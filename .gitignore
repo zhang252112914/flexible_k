@@ -20,3 +20,5 @@ __pycache__/
 /output_bz64/
 /output_xpool_visual/
 /output_xpool_eval/
+/output_base/
+/eval/

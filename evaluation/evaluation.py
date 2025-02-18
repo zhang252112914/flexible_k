@@ -4,6 +4,7 @@ import numpy as np
 from modules.util_func import parallel_apply_2
 from modules.metrics import compute_metrics_together
 from modules.cluster.fast_kmeans import batch_fast_kmedoids
+from modules.metrics_eventnum import compute_metrics_event
 
 def _run_on_single_gpu(model, batch_list_t, batch_list_v, batch_sequence_output_list, batch_visual_output_list):
     sim_matrix = []
@@ -142,3 +143,18 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu, logger):
     logger.info("Video to text:")
     for key in vt_metrics:
         logger.info("{}: {}".format(key, vt_metrics[key]))
+
+    logger.info("divide metrics by the number of texts")
+    tv_metrics, vt_metrics = compute_metrics_event(sim_matrix.T, sim_matrix_mask.T)
+    logger.info("Text to Video:")
+    for key in tv_metrics:
+        logger.info("text_num = {}". format(key))
+        logger.info("recall@1: {}".format(tv_metrics[key][0]))
+        logger.info("recall@5: {}".format(tv_metrics[key][1]))
+        logger.info("recall@10: {}".format(tv_metrics[key][2]))
+    logger.info("Video to Text")
+    for key in vt_metrics:
+        logger.info("text_num = {}". format(key))
+        logger.info("recall@1: {}".format(vt_metrics[key][0]))
+        logger.info("recall@5: {}".format(vt_metrics[key][1]))
+        logger.info("recall@10: {}".format(vt_metrics[key][2]))
