@@ -14,6 +14,7 @@ from modules.util_module import all_gather_only as allgather
 from modules.topk_pick_event import pick_frames_event, get_global_representation, add_global_info
 from modules.topk_pick import pick_frames
 from modules.xpool.transformer import Transformer
+from modules.global_attention import global_attention
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class MeRetriever(MeRetrieverPretrained):
         self.ignore_video_index = -1
         self.logger = logger
         self.global_info = task_config.global_info
+        self.global_attn = task_config.global_attn
 
         # assert self.task_config.max_words + self.task_config.max_frames <= cross_config.max_position_embeddings
 
@@ -197,7 +199,7 @@ class MeRetriever(MeRetrieverPretrained):
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
-            if self.global_info:
+            if self.global_info or self.global_attn:
                 global_visual_output = get_global_representation(visual_output, video_mask)
             
             picked_frames = pick_frames_event(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone, ranges=ranges)
@@ -222,6 +224,8 @@ class MeRetriever(MeRetrieverPretrained):
 
             if self.global_info:
                 visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
+            if self.global_attn:
+                visual_output = global_attention(visual_output, global_visual_output)
 
         if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
@@ -427,13 +431,16 @@ class MeRetriever(MeRetrieverPretrained):
             # noinspection PyUnresolvedReferences
             torch.distributed.barrier()
 
-        # because the last dimension of the visual_output holds some all-zero vector, which means the visual_output.norm will contain 0 in the last dimension and this will be applied to the divison, and that's a disaster!
-        norms = visual_output.norm(dim=-1, keepdim=True)
-        norms = norms + (norms == 0).float()
-        visual_output = visual_output / norms   # visual_output.norm(dim=-1, keepdim=True)
-        visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask) # visual_output is the shape(batch_size, embed_dim)
-        # the mean_pooling didn't generate nan
-        visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
+        if self.global_attn and self.training:
+            pass
+        else:
+            # because the last dimension of the visual_output holds some all-zero vector, which means the visual_output.norm will contain 0 in the last dimension and this will be applied to the divison, and that's a disaster!
+            norms = visual_output.norm(dim=-1, keepdim=True)
+            norms = norms + (norms == 0).float()
+            visual_output = visual_output / norms   # visual_output.norm(dim=-1, keepdim=True)
+            visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask) # visual_output is the shape(batch_size, embed_dim)
+            # the mean_pooling didn't generate nan
+            visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
 
         sequences = []
         sequence_mask = []

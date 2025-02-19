@@ -25,3 +25,4 @@ __pycache__/
 /output_xpool_eval/
 /output_base/
 /eval/
+/output_topk_event_globalattn/
