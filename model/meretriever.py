@@ -28,6 +28,7 @@ class MeRetriever(MeRetrieverPretrained):
         self.logger = logger
         self.global_info = task_config.global_info
         self.global_attn = task_config.global_attn
+        self.global_again = task_config.global_again
 
         # assert self.task_config.max_words + self.task_config.max_frames <= cross_config.max_position_embeddings
 
@@ -227,6 +228,8 @@ class MeRetriever(MeRetrieverPretrained):
             if self.global_attn:
                 new_global_visual_output = global_attention(visual_output, global_visual_output)
                 visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, new_global_visual_output, vt_mask)
+                if self.global_again:
+                    visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
 
         if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
