@@ -28,6 +28,7 @@ class MyCharadesMeDataloader(Dataset):
             image_resolution=224,
             frame_order=0,
             slice_framepos=0,
+            K = 16,
             fps=3
     ):
         self.data_path = data_path
@@ -35,6 +36,7 @@ class MyCharadesMeDataloader(Dataset):
         self.max_words = max_words
         self.max_frames = max_frames
         self.tokenizer = tokenizer
+        self.K = K
         self.fps = fps
         # 0: ordinary order; 1: reverse order; 2: random order.
         self.frame_order = frame_order
@@ -185,17 +187,22 @@ class MyCharadesMeDataloader(Dataset):
     
     # 检查原有的视频，对应事件是否能够产生足够数量的帧
     def check_and_expand_events(self, length, starts, ends):
+
+        max_frames = self.max_frames
+        selected_frames = self.K
+        ratio = selected_frames / max_frames
+
         n = len(starts)
         total_duration = 0 #total_duration is the total number of seconds
         for i in range(n):
             total_duration += (ends[i] - starts[i])
         
-        valid_rate = total_duration / length if length*self.fps > 16 else total_duration*self.fps / 64
+        valid_rate = total_duration / length if length*self.fps > max_frames else total_duration*self.fps / max_frames
         if valid_rate*64 >= 16:
             return starts, ends
         
         else:
-            sum_increment = (0.25 - valid_rate) * length if self.fps*length > 64 else math.ceil((16-total_duration*self.fps) / self.fps) # sum_increment是总共要增加的秒数
+            sum_increment = (ratio - valid_rate) * length if self.fps*length > max_frames else math.ceil((selected_frames-total_duration*self.fps) / self.fps) # sum_increment是总共要增加的秒数
 
             for i in range(n):
 

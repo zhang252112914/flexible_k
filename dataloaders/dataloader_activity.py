@@ -50,9 +50,9 @@ class ActivityNetMeDataLoader(Dataset):
         video_json_path_dict = {"train": os.path.join(self.data_path, "train.json"),
                                 "val": os.path.join(self.data_path, "val_1.json")}
 
-        video_id_list = self._get_video_id_single(video_id_path_dict[self.subset])
+        video_id_list = self._get_video_id_single(video_id_path_dict[self.subset]) # all video ids in the subset
 
-        video_dict = {}
+        video_dict = {} # video_id: video_path
         for root, dub_dir, video_files in os.walk(self.features_path):
             for video_file in video_files:
                 video_id_ = ".".join(video_file.split(".")[:-1])
@@ -65,10 +65,11 @@ class ActivityNetMeDataLoader(Dataset):
         self.video_id_list = video_id_list
 
         # Get iterator video ids
-        self.video_id2idx_dict = {pseudo_video_id: id_ for id_, pseudo_video_id in enumerate(self.video_id_list)}
+        self.video_id2idx_dict = {pseudo_video_id: id_ for id_, pseudo_video_id in enumerate(self.video_id_list)} # video_id: index
         # Get all captions
         with open(video_json_path_dict[self.subset], 'r') as fname:
             self.dat = json.load(fname)
+        # min_dur is always none
         if min_dur is not None and max_dur is not None:
             dat1 = {}
             for key in self.dat:

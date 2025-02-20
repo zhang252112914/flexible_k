@@ -150,6 +150,7 @@ def mydataloader_charades_train(args, tokenizer):
         max_frames=args.max_frames,
         frame_order=args.train_frame_order,
         slice_framepos=args.slice_framepos,
+        K = args.K,
     )
     sampler = torch.utils.data.distributed.DistributedSampler(dataset)
     dataloader = DataLoader(
