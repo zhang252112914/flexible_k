@@ -4,6 +4,7 @@ from dataloaders.dataloader_activity import ActivityNetMeDataLoader
 from dataloaders.dataloader_charades import CharadesMeDataloader
 from dataloaders.mydataloader_charades import MyCharadesMeDataloader
 from dataloaders.shuffle_dataloader_charades import ShuffleCharadesMeDataloader
+from dataloaders.shuffle_dataloader_activitynet import ShuffleActivityNetMeDataLoader
 
 def dataloader_factory(args, tokenizer, logger):
     assert args.datatype in DATALOADER_DICT
@@ -55,6 +56,8 @@ def dataloader_activity_train(args, tokenizer):
         max_frames=args.max_frames,
         frame_order=args.train_frame_order,
         slice_framepos=args.slice_framepos,
+        K = args.K,
+        fps = args.K
     )
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(activity_dataset)
@@ -68,6 +71,32 @@ def dataloader_activity_train(args, tokenizer):
         drop_last=True,
     )
 
+    return dataloader, len(activity_dataset), train_sampler
+
+def shuffle_dataloader_activity_train(args, tokenizer, subset="train"):
+    print("shuffle dataloader")
+    activity_dataset = ShuffleActivityNetMeDataLoader(
+        subset="train",
+        data_path=args.data_path,
+        features_path=args.features_path,
+        max_words=args.max_words,
+        feature_framerate=args.feature_framerate,
+        tokenizer=tokenizer,
+        max_frames=args.max_frames,
+        frame_order=args.train_frame_order,
+        slice_framepos=args.slice_framepos,
+        shuffle_events=args.shuffle_events
+    )
+    train_sampler = torch.utils.data.distributed.DistributedSampler(activity_dataset)
+    dataloader = DataLoader(
+        activity_dataset,
+        batch_size=args.batch_size // args.n_gpu,
+        num_workers=args.num_thread_reader,
+        pin_memory=False,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
+        drop_last=True,
+    )
     return dataloader, len(activity_dataset), train_sampler
 
 def dataloader_activity_test(args, tokenizer, subset="test"):
@@ -194,7 +223,7 @@ def shuffle_dataloader_charades_train(args, tokenizer):
 DATALOADER_DICT = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
                    "charades": {"train": mydataloader_charades_train, "val": dataloader_charades_test,
                                 "test": dataloader_charades_test}}
-DATALOADER_DICT2 = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
+DATALOADER_DICT2 = {"activity": {"train": shuffle_dataloader_activity_train, "val": dataloader_activity_test, "test": None},
                    "charades": {"train": shuffle_dataloader_charades_train, "val": dataloader_charades_test,
                                 "test": dataloader_charades_test}}
 

@@ -199,7 +199,8 @@ class ShuffleCharadesMeDataloader(Dataset):
         video, video_mask, dat['pairs'], dat['segment_num'], duration = self._get_rawvideo(dat['video'], duration, 0, duration, dat['pair'], dat['segment_num'])
         
         if self.shuffle_events:
-            video, video_mask = sve.shuffle_video_events(dat['segment_num'], dat['pair'], video, video_mask, duration)
+            video, video_mask = sve.shuffle_video_events(dat['segment_num'], dat['pairs'], video, video_mask, duration)
         
         vt_mask = self._get_vt_mask(video_mask, duration, dat['start'], dat['end'])
-        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, len(dat['sentences'])
+        ranges=[]
+        return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, len(dat['sentences']), ranges

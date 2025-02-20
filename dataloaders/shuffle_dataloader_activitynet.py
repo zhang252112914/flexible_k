@@ -10,9 +10,10 @@ import json
 import torch
 import math
 from dataloaders.rawvideo_util import RawVideoExtractor
+import dataloaders.shuffle_video_events as sve
 
 
-class ActivityNetMeDataLoader(Dataset):
+class ShuffleActivityNetMeDataLoader(Dataset):
     max_text_per_video = 27
 
     def __init__(
@@ -21,14 +22,13 @@ class ActivityNetMeDataLoader(Dataset):
             data_path,
             features_path,
             tokenizer,
+            shuffle_events,
             max_words=30,
             feature_framerate=1.0,
             max_frames=100,
             image_resolution=224,
             frame_order=0,
             slice_framepos=0,
-            K = 16,
-            fps = 3,
             min_dur=None,
             max_dur=None
     ):
@@ -47,6 +47,7 @@ class ActivityNetMeDataLoader(Dataset):
 
         self.subset = subset
         assert self.subset in ["train", "val"]
+        self.shuffle_events = shuffle_events
 
         video_id_path_dict = {"train": os.path.join(self.data_path, "train_ids.json"),
                               "val": os.path.join(self.data_path, "val_ids.json")}
@@ -139,7 +140,7 @@ class ActivityNetMeDataLoader(Dataset):
 
         return pairs_text, pairs_mask, group_mask
 
-    def _get_rawvideo(self, idx, dur, s, e):
+    def _get_rawvideo(self, idx, dur, s, e, pairs, segment_num):
         video_mask = np.zeros((1, self.max_frames), dtype=np.long)
         max_video_length = [0] * 1
 
@@ -151,6 +152,11 @@ class ActivityNetMeDataLoader(Dataset):
             for i in range(1):
                 # Should be optimized by gathering all asking of this video
                 raw_video_data = self.rawVideoExtractor.get_video_data(video_path, dur, s, e)
+
+                if segment_num > 1:
+                    for j in range(segment_num):
+                        if pairs[j][1] > pairs[j+1][0]:
+                            raw_video_data, dur, pairs = sve.video_expansion(raw_video_data, pairs, j, dur)
 
                 if len(raw_video_data.shape) > 3:
                     raw_video_data_clip = raw_video_data
@@ -185,7 +191,7 @@ class ActivityNetMeDataLoader(Dataset):
         for i, v_length in enumerate(max_video_length):
             video_mask[i][:v_length] = [1] * v_length
 
-        return video, video_mask
+        return video, video_mask, pairs, segment_num, dur
 
     def _get_vt_mask(self, v_mask, dur, ts):
         res = np.zeros((self.max_text_per_video, self.max_frames), dtype=int)
@@ -199,66 +205,28 @@ class ActivityNetMeDataLoader(Dataset):
             temp[frame_time > end] = 0
             res[k, :n_frames] = temp
         return res
-    # 检查原有的视频，对应事件是否能够产生足够数量的帧
-    def check_and_expand_events(self, length, starts, ends):
-
-        max_frames = self.max_frames
-        selected_frames = self.K
-        ratio = selected_frames / max_frames
-
-        n = len(starts)
-        total_duration = 0 #total_duration is the total number of seconds
-        for i in range(n):
-            total_duration += (ends[i] - starts[i])
-        
-        valid_rate = total_duration / length if length*self.fps > max_frames else total_duration*self.fps / max_frames
-        if valid_rate*64 >= 16:
-            return starts, ends
-        
-        else:
-            sum_increment = (ratio - valid_rate) * length if self.fps*length > max_frames else math.ceil((selected_frames-total_duration*self.fps) / self.fps) # sum_increment是总共要增加的秒数
-
-            for i in range(n):
-
-                increment = math.ceil(sum_increment * (ends[i] - starts[i]) / total_duration) # 按照不同event的占比划分increment
-                half_increment = increment / 2
-                if starts[i] - half_increment >= 0 and ends[i] + half_increment <= length:
-                    starts[i] = math.floor(starts[i] - half_increment)
-                    ends[i] = math.ceil(ends[i] + half_increment)
-                elif starts[i] - half_increment < 0: 
-                    ends[i] = math.ceil(ends[i] + increment - starts[i])
-                    starts[i] = 0
-                else: 
-                    starts[i] = math.floor(starts[i] - increment + (length - ends[i]))
-                    ends[i] = length
-
-            return starts, ends
     
-    def generate_event_range(self, length, starts, ends):
-        n = len(starts)
-        k = self.max_text_per_video
-        ranges = torch.zeros((k, 2), dtype=torch.long)
-        for i in range(n):
-            start_p = max(0, starts[i])
-            end_p = min(length, ends[i])
+    def _get_segment(self, timestamps):
+        pairs = []
+        for timestamp in timestamps:
+            pairs.append((timestamp[0], timestamp[1]))
+        segment_num = len(pairs)
+        return pairs, segment_num
 
-            # add a step to check if the range of event can generate enough frames
-            start = math.floor(start_p * self.max_frames / length)
-            end = math.ceil(end_p * self.max_frames / length)
-            ranges[i] = torch.tensor([start, end])
-        return ranges
 
     def __getitem__(self, feature_idx):
         video_id, duration, sentences, timestamps = self.video_text_pairs[feature_idx]
         sentences_num = len(sentences)
-        starts = []
-        ends = []
-        for timestamp in timestamps:
-            starts.append(timestamp[0])
-            ends.append(timestamp[1])
-        starts, ends = self.check_and_expand_events(duration, starts, ends)
         pairs_text, pairs_mask, group_mask = self._get_text(sentences)
-        video, video_mask = self._get_rawvideo(video_id, duration, 0, duration)
+
+        pairs, segment_num = self._get_segment(timestamps)
+        segment_num, pairs = sve.process_pairs(segment_num, pairs, duration)
+
+        video, video_mask, pairs, segment_num, duration = self._get_rawvideo(video_id, duration, 0, duration, pairs, segment_num)
+
+        if self.shuffle_events:
+            video, video_mask = sve.shuffle_video_events(segment_num, pairs, video, video_mask, duration)
+
         vt_mask = self._get_vt_mask(video_mask, duration, timestamps)
-        ranges = self.generate_event_range(duration, starts, ends)
+        ranges = []
         return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, sentences_num, ranges
