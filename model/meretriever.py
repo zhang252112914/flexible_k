@@ -225,7 +225,8 @@ class MeRetriever(MeRetrieverPretrained):
             if self.global_info:
                 visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
             if self.global_attn:
-                visual_output = global_attention(visual_output, global_visual_output)
+                new_global_visual_output = global_attention(visual_output, global_visual_output)
+                visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, new_global_visual_output, vt_mask)
 
         if self.post_process == 'cluster':
         # this steps transform the text and video into the same space(embedding?)
@@ -431,16 +432,24 @@ class MeRetriever(MeRetrieverPretrained):
             # noinspection PyUnresolvedReferences
             torch.distributed.barrier()
 
-        if self.global_attn and self.training:
-            pass
-        else:
-            # because the last dimension of the visual_output holds some all-zero vector, which means the visual_output.norm will contain 0 in the last dimension and this will be applied to the divison, and that's a disaster!
-            norms = visual_output.norm(dim=-1, keepdim=True)
-            norms = norms + (norms == 0).float()
-            visual_output = visual_output / norms   # visual_output.norm(dim=-1, keepdim=True)
-            visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask) # visual_output is the shape(batch_size, embed_dim)
-            # the mean_pooling didn't generate nan
-            visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
+        # if self.global_attn and self.training:
+        #     pass
+        # else:
+        #     # because the last dimension of the visual_output holds some all-zero vector, which means the visual_output.norm will contain 0 in the last dimension and this will be applied to the divison, and that's a disaster!
+        #     norms = visual_output.norm(dim=-1, keepdim=True)
+        #     norms = norms + (norms == 0).float()
+        #     visual_output = visual_output / norms   # visual_output.norm(dim=-1, keepdim=True)
+        #     visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask) # visual_output is the shape(batch_size, embed_dim)
+        #     # the mean_pooling didn't generate nan
+        #     visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
+
+        # because the last dimension of the visual_output holds some all-zero vector, which means the visual_output.norm will contain 0 in the last dimension and this will be applied to the divison, and that's a disaster!
+        norms = visual_output.norm(dim=-1, keepdim=True)
+        norms = norms + (norms == 0).float()
+        visual_output = visual_output / norms   # visual_output.norm(dim=-1, keepdim=True)
+        visual_output = self._mean_pooling_for_similarity_visual(visual_output, video_mask) # visual_output is the shape(batch_size, embed_dim)
+        # the mean_pooling didn't generate nan
+        visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
 
         sequences = []
         sequence_mask = []

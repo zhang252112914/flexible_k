@@ -26,3 +26,4 @@ __pycache__/
 /output_base/
 /eval/
 /output_topk_event_globalattn/
+/output_topk_event_globalattn_mean/
