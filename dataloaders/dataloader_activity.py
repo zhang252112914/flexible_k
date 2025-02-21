@@ -44,6 +44,8 @@ class ActivityNetMeDataLoader(Dataset):
         # 0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly.
         self.slice_framepos = slice_framepos
         assert self.slice_framepos in [0, 1, 2]
+        self.K = K
+        self.fps = fps
 
         self.subset = subset
         assert self.subset in ["train", "val"]
@@ -145,7 +147,7 @@ class ActivityNetMeDataLoader(Dataset):
 
         # Pair x L x T x 3 x H x W
         video = np.zeros((1, self.max_frames, 1, 3,
-                          self.rawVideoExtractor.size, self.rawVideoExtractor.size), dtype=np.float)
+                          self.rawVideoExtractor.size, self.rawVideoExtractor.size), dtype=np.float64)
         video_path = self.video_dict[idx]
         try:
             for i in range(1):
