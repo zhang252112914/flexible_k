@@ -324,7 +324,7 @@ class MeRetriever(MeRetrieverPretrained):
                                                                          sequence_hidden.shape[1]).to(text.device)))
             res.append(sequence_hidden)
         ret = torch.stack(res)
-        return ret # (batch_size, max_text_per_video, embed_dim)
+        return ret #(batch_size, max_sentences_per_video, embed_dim)
 
     def get_visual_output(self, video, video_mask, shaped=False, video_frame=-1):
         if shaped is False:
@@ -344,7 +344,7 @@ class MeRetriever(MeRetrieverPretrained):
         return visual_hidden  # (batch_size, frames, hidden_size)
 
 
-    def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1):
+    def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1): #group_mask is the vt_mask
         if shaped is False:
             video_mask = video_mask.view(-1, video_mask.shape[-1])
 
