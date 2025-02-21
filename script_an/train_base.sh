@@ -1,5 +1,5 @@
-CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 \
---master_port=54198 \
+CUDA_VISIBLE_DEVICES=2,3 torchrun --nproc_per_node=2 \
+--master_port=52198 \
 main.py --do_train \
 --num_thread_reader=4 \
 --data_path /home/zyl/activitynet/captions \

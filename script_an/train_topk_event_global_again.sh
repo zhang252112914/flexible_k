@@ -1,4 +1,4 @@
-CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 \
+CUDA_VISIBLE_DEVICES=4,5 torchrun --nproc_per_node=2 \
 --master_port=54198 \
 main.py --do_train \
 --num_thread_reader=4 \
