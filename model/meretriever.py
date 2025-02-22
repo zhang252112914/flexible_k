@@ -11,7 +11,7 @@ from modules.module_cross import CrossModel, CrossConfig, Transformer as Transfo
 from modules.util_module import PreTrainedModel, AllGather, CrossEnMulti, CrossEnMulti_unbalanced
 from modules.cluster.fast_kmeans import batch_fast_kmedoids
 from modules.util_module import all_gather_only as allgather
-from modules.topk_pick_event import pick_frames_event, get_global_representation, add_global_info
+from modules.topk_pick_event import pick_frames_event, get_global_representation, add_global_info, pick_frames_event_local
 from modules.topk_pick import pick_frames
 from modules.xpool.transformer import Transformer
 from modules.global_attention import global_attention
@@ -29,6 +29,7 @@ class MeRetriever(MeRetrieverPretrained):
         self.global_info = task_config.global_info
         self.global_attn = task_config.global_attn
         self.global_again = task_config.global_again
+        self.local_contrastive = task_config.local_contrastive
 
         # assert self.task_config.max_words + self.task_config.max_frames <= cross_config.max_position_embeddings
 
@@ -183,7 +184,7 @@ class MeRetriever(MeRetrieverPretrained):
             vt_mask = self.get_interval_after_cluster(group_mask, vt_mask)
 
         #modified
-        if self.post_process == 'topk_event':
+        if self.post_process == 'topk_event' and not self.local_contrastive:
             batch_size = text.shape[0]
             K = self.task_config.K
             pick_arrangement = []
@@ -297,11 +298,51 @@ class MeRetriever(MeRetrieverPretrained):
 
             if self.global_info:
                 visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
+        
+        if self.post_process == 'topk_event' and self.local_contrastive:
+            batch_size = text.shape[0]
+            K = self.task_config.K
+            pick_arrangement = []
+            if(self.onlyone):
+                for i in range(batch_size):
+                    pick_arrangement = [[1] * s for s in sentence_num]
+            else:
+                for i in range(batch_size):
+                    frame_per_sentence = K // sentence_num[i]
+                    reminder = K % sentence_num[i]
+                    arrangement = [frame_per_sentence] * sentence_num[i]
+                    arrangement[-1] += reminder
+                    pick_arrangement.append(arrangement)
+            sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
+                                                                         video, video_mask, group_mask, shaped=True,
+                                                                         video_frame=video_frame)
+            
+            picked_frames, frames_texts_mask = pick_frames_event_local(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone, ranges=ranges)
+            
+            idx = torch.arange(visual_output.shape[0], dtype=torch.long, device=visual_output.device).unsqueeze(-1)
+
+            mask_invalid = picked_frames == -1
+            picked_frames_clamped = picked_frames.clone()
+            picked_frames_clamped[mask_invalid] = 0
+
+            visual_output = visual_output[idx, picked_frames_clamped]
+            visual_output[mask_invalid] = 0
+
+            video_mask = video_mask[idx, picked_frames_clamped]
+            video_mask[mask_invalid] = 0
+
+            picked_frames_clamped = picked_frames_clamped.unsqueeze(1)  # (batch_size, 1, K)
+            vt_mask = vt_mask.gather(2, picked_frames_clamped.expand(-1, vt_mask.size(1), -1))  # (batch_size, num_time_steps, K)
+            mask_invalid = mask_invalid.unsqueeze(1).expand(-1, vt_mask.size(1), -1)  # (batch_size, num_time_steps, K)
+            vt_mask[mask_invalid] = 0
 
         if self.training:
             if self.multi2multi:
                 sim_matrix, sim_mask = self.get_similarity_multi2multi_logits(sequence_output, visual_output, video_mask,
                                                                        group_mask, vt_mask)
+            elif self.local_contrastive:
+                sim_matrix, sim_mask = self.get_similarity_local_contrastive_logits(sequence_output, visual_output, video_mask,
+                                                                                    group_mask, frames_texts_mask)
             else:
                 sim_matrix, sim_mask = self.get_similarity_logits(sequence_output, visual_output, text_mask, video_mask,
                                                                   group_mask, shaped=True, loose_type=self.loose_type)
@@ -344,7 +385,7 @@ class MeRetriever(MeRetrieverPretrained):
         return visual_hidden  # (batch_size, frames, hidden_size)
 
 
-    def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1): #group_mask is the vt_mask
+    def get_sequence_visual_output(self, text, text_mask, video, video_mask, group_mask, shaped=False, video_frame=-1):
         if shaped is False:
             video_mask = video_mask.view(-1, video_mask.shape[-1])
 
@@ -531,6 +572,52 @@ class MeRetriever(MeRetrieverPretrained):
         retrieve_logits = torch.cat(retrieve_logits_list, dim=0)
         return retrieve_logits, sequence_mask
     
+    def get_similarity_local_contrastive_logits(self, sequence_output, visual_output, video_mask, group_mask, frames_texts_mask):
+        sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
+        if self.training:
+            visual_output = allgather(visual_output, self.task_config, keep_itself=True)
+            video_mask = allgather(video_mask, self.task_config)
+            sequence_output = allgather(sequence_output, self.task_config, keep_itself=True)
+            group_mask = allgather(group_mask, self.task_config)
+            frames_texts_mask = allgather(frames_texts_mask, self.task_config)
+            # noinspection PyUnresolvedReferences
+            torch.distributed.barrier()
+        
+        norms = visual_output.norm(dim=-1, keepdim=True)
+        norms = norms + (norms == 0).float()
+        visual_output = visual_output / norms
+        bz, K, _ = visual_output.size()
+        visual_output = visual_output.view(bz * K, -1)
+
+        sequence = []
+        sequence_mask = []
+        for i in range(len(sequence_output)):
+            temp = sequence_output[i][group_mask[i] == 1]
+            temp = temp / temp.norm(dim=-1, keepdim=True)
+            sequence.append(temp)
+
+            temp = torch.zeros(len(temp), K*bz).to(sequence_output.device)
+            texts_frames_mask = frames_texts_mask[i].T
+            texts_frames_mask = texts_frames_mask[group_mask[i]==1]
+
+            # tf_mask = torch.sum(texts_frames_mask, dim=0)
+            # if (tf_mask == 0).any().item():
+            #     print(i)
+            #     raise ValueError("here")
+            temp[:,i*K:(i+1)*K] = texts_frames_mask
+            # temp_temp = torch.sum(temp, dim=0)
+            # if (temp_temp == 0).any().item():
+            #     raise ValueError("temp zero")
+            
+            sequence_mask.append(temp)
+        
+        sequence_output = torch.concat(sequence)
+        sequence_mask = torch.concat(sequence_mask)
+        logit_scale = self.clip.logit_scale.exp()
+        retrieve_logits = logit_scale * torch.matmul(sequence_output, visual_output.T)
+
+        return retrieve_logits, sequence_mask
+
     def get_similarity_logits(self, sequence_output, visual_output, attention_mask, video_mask, group_mask,
                               shaped=False, loose_type=False):
         if shaped is False:

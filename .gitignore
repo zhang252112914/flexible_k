@@ -29,3 +29,4 @@ __pycache__/
 /output_topk_event_globalattn_mean/
 /output_topk_event_global_again/
 /output_an/
+/output_topk_event_local/

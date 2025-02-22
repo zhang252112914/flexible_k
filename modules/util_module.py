@@ -194,6 +194,9 @@ class CrossEnMulti(nn.Module):
     def forward(self, sim_matrix, sim_mask):
         logpt = F.log_softmax(sim_matrix, dim=0)
         sim_mask = sim_mask / torch.sum(sim_mask, dim=0)
+        # if torch.isnan(sim_mask).any():
+        #     print(sim_mask.shape)
+        #     raise ValueError("sim_mask has nan")
         logpt = -torch.sum(logpt*sim_mask, dim=0)
         loss = logpt.mean()
         return loss

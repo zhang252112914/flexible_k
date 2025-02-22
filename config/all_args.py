@@ -174,6 +174,8 @@ def get_args(description='Me-Retriever on Retrieval Task'):
     parser.add_argument('--global_again', action='store_true', help='global_attn + global_info')
 
     parser.add_argument("--fps", type=int, default=3, help="the fps of the source video")
+
+    parser.add_argument("--local_contrastive", action='store_true', help="local contrastive loss")
     
     #================== xpool related ==================
     parser.add_argument("--num_mha_heads", type=int, default=1, help="the number of heads in the xpool module")
