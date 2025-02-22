@@ -193,9 +193,10 @@ class MeRetriever(MeRetrieverPretrained):
                     pick_arrangement = [[1] * s for s in sentence_num]
             else:
                 for i in range(batch_size):
-                    frame_per_sentence = K // sentence_num[i]
-                    reminder = K % sentence_num[i]
-                    arrangement = [frame_per_sentence] * sentence_num[i]
+                    curr_sentence_num = sentence_num[i].item()
+                    frame_per_sentence = K // curr_sentence_num
+                    reminder = K % curr_sentence_num
+                    arrangement = [frame_per_sentence] * curr_sentence_num
                     arrangement[-1] += reminder
                     pick_arrangement.append(arrangement)
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
@@ -267,9 +268,10 @@ class MeRetriever(MeRetrieverPretrained):
                     pick_arrangement = [[1] * s for s in sentence_num]
             else:
                 for i in range(batch_size):
-                    frame_per_sentence = K // sentence_num[i]
-                    reminder = K % sentence_num[i]
-                    arrangement = [frame_per_sentence] * sentence_num[i]
+                    curr_sentence_num = sentence_num[i].item()
+                    frame_per_sentence = K // curr_sentence_num
+                    reminder = K % curr_sentence_num
+                    arrangement = [frame_per_sentence] * curr_sentence_num
                     arrangement[-1] += reminder
                     pick_arrangement.append(arrangement)
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
@@ -308,9 +310,10 @@ class MeRetriever(MeRetrieverPretrained):
                     pick_arrangement = [[1] * s for s in sentence_num]
             else:
                 for i in range(batch_size):
-                    frame_per_sentence = K // sentence_num[i]
-                    reminder = K % sentence_num[i]
-                    arrangement = [frame_per_sentence] * sentence_num[i]
+                    curr_sentence_num = sentence_num[i].item()
+                    frame_per_sentence = K // curr_sentence_num
+                    reminder = K % curr_sentence_num
+                    arrangement = [frame_per_sentence] * curr_sentence_num
                     arrangement[-1] += reminder
                     pick_arrangement.append(arrangement)
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
@@ -597,12 +600,14 @@ class MeRetriever(MeRetrieverPretrained):
             sequence.append(temp)
 
             temp = torch.zeros(len(temp), K*bz).to(sequence_output.device)
-            texts_frames_mask = frames_texts_mask[i].T
-            texts_frames_mask = texts_frames_mask[group_mask[i]==1]
+            texts_frames_mask = frames_texts_mask[i].T   # (max_text_num, K)
+            texts_frames_mask = texts_frames_mask[group_mask[i]==1] # (valid_text, K)
 
-            # tf_mask = torch.sum(texts_frames_mask, dim=0)
+            # tf_mask = torch.sum(texts_frames_mask, dim=1)
             # if (tf_mask == 0).any().item():
             #     print(i)
+            #     print(texts_frames_mask)
+            #     print(group_mask[i])
             #     raise ValueError("here")
             temp[:,i*K:(i+1)*K] = texts_frames_mask
             # temp_temp = torch.sum(temp, dim=0)
