@@ -173,3 +173,50 @@ def parallel_apply_2(fct, model, inputs, device_ids):
         outputs.append(o1)
         masks.append(o2)
     return outputs, masks
+
+def parallel_apply_2_all(fct, model, inputs, device_ids):
+    modules = nn.parallel.replicate(model, device_ids)
+    assert len(modules) == len(inputs)
+    lock = threading.Lock()
+    results = {}
+    grad_enabled = torch.is_grad_enabled()
+
+    def _worker(i, module, input):
+        torch.set_grad_enabled(grad_enabled)
+        device = get_a_var(input).get_device()
+        try:
+            with torch.cuda.device(device):
+                # this also avoids accidental slicing of `input` if it is a Tensor
+                if not isinstance(input, (list, tuple)):
+                    input = (input,)
+                output = fct(module, *input)
+            with lock:
+                results[i] = output
+        except Exception:
+            with lock:
+                results[i] = ExceptionWrapper(where="in replica {} on device {}".format(i, device))
+
+    if len(modules) > 1:
+        threads = [threading.Thread(target=_worker, args=(i, module, input))
+                   for i, (module, input) in enumerate(zip(modules, inputs))]
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    else:
+        _worker(0, modules[0], inputs[0])
+
+    outputs, masks, outputs_max, masks_max, outputs_avg, masks_avg = [], [], [], [], [], []
+    for i in range(len(inputs)):
+        output = results[i]
+        if isinstance(output, ExceptionWrapper):
+            output.reraise()
+        o1, o2, o3, o4, o5, o6 = output
+        outputs.append(o1)
+        masks.append(o2)
+        outputs_max.append(o3)
+        masks_max.append(o4)
+        outputs_avg.append(o5)
+        masks_avg.append(o6)
+    return outputs, masks, outputs_max, masks_max, outputs_avg, masks_avg

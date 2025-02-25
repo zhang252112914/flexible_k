@@ -176,6 +176,8 @@ def get_args(description='Me-Retriever on Retrieval Task'):
     parser.add_argument("--fps", type=int, default=3, help="the fps of the source video")
 
     parser.add_argument("--local_contrastive", action='store_true', help="local contrastive loss")
+
+    parser.add_argument("--local_weight", type=float, default=1.0, help="the weight of local contrastive loss")
     
     #================== xpool related ==================
     parser.add_argument("--num_mha_heads", type=int, default=1, help="the number of heads in the xpool module")
@@ -188,6 +190,8 @@ def get_args(description='Me-Retriever on Retrieval Task'):
 
     parser.add_argument("--xpool_visualize_dir", type=str, default='/home/zyl/flexible/xpool_visual', help="the directory to save the attention map")
 
+    #================== test related ==================
+    parser.add_argument("--test_method", type=str, default="none", choices=["none", "avg", "max", 'lse',"all"] , help="test similarity calculation")
 
     args = parser.parse_args()
 

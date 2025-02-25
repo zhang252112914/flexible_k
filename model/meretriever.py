@@ -30,6 +30,8 @@ class MeRetriever(MeRetrieverPretrained):
         self.global_attn = task_config.global_attn
         self.global_again = task_config.global_again
         self.local_contrastive = task_config.local_contrastive
+        self.test_method = task_config.test_method
+        self.local_weight = task_config.local_weight
 
         # assert self.task_config.max_words + self.task_config.max_frames <= cross_config.max_position_embeddings
 
@@ -319,6 +321,9 @@ class MeRetriever(MeRetrieverPretrained):
             sequence_output, visual_output = self.get_sequence_visual_output(text, text_mask,
                                                                          video, video_mask, group_mask, shaped=True,
                                                                          video_frame=video_frame)
+
+            if self.global_info or self.global_attn:
+                global_visual_output = get_global_representation(visual_output, video_mask)
             
             picked_frames, frames_texts_mask = pick_frames_event_local(sequence_output, visual_output, group_mask, video_mask, pick_arrangement, K, sentence_num, onlyone=self.onlyone, ranges=ranges)
             
@@ -339,14 +344,30 @@ class MeRetriever(MeRetrieverPretrained):
             mask_invalid = mask_invalid.unsqueeze(1).expand(-1, vt_mask.size(1), -1)  # (batch_size, num_time_steps, K)
             vt_mask[mask_invalid] = 0
 
+            local_visual_output = visual_output.clone()  # local contrastive 保留一份原始的visual_output
+
+            if self.global_attn:  # global 级的表示保留一份
+                new_global_visual_output = global_attention(visual_output, global_visual_output)
+                visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, new_global_visual_output, vt_mask)
+                if self.global_again:
+                    visual_output, video_mask, vt_mask = add_global_info(visual_output, video_mask, global_visual_output, vt_mask)
+
         if self.training:
-            if self.multi2multi:
+            if self.local_contrastive and self.global_attn:
+                sim_matrix_frame, sim_mask_frame = self.get_similarity_local_contrastive_logits(sequence_output, local_visual_output, video_mask, group_mask, frames_texts_mask)
+                sim_matrix_global, sim_mask_global = self.get_similarity_logits(sequence_output, visual_output, text_mask, video_mask, group_mask, shaped=True, loose_type=self.loose_type)
+                sim_loss = self.local_weight * self.loss_fct(sim_matrix_frame, sim_mask_frame) + self.loss_fct(sim_matrix_global, sim_mask_global)
+                sim_loss2 = self.local_weight * self.loss_fct(sim_matrix_frame.T, sim_mask_frame.T) + self.loss_fct(sim_matrix_global.T, sim_mask_global.T)
+                reg_loss = None
+                return sim_loss, sim_loss2, reg_loss
+            
+            elif self.multi2multi:
                 sim_matrix, sim_mask = self.get_similarity_multi2multi_logits(sequence_output, visual_output, video_mask,
                                                                        group_mask, vt_mask)
-            elif self.local_contrastive:
+            elif self.local_contrastive: # local
                 sim_matrix, sim_mask = self.get_similarity_local_contrastive_logits(sequence_output, visual_output, video_mask,
                                                                                     group_mask, frames_texts_mask)
-            else:
+            else: # global
                 sim_matrix, sim_mask = self.get_similarity_logits(sequence_output, visual_output, text_mask, video_mask,
                                                                   group_mask, shaped=True, loose_type=self.loose_type)
             sim_loss = self.loss_fct(sim_matrix, sim_mask)
@@ -701,3 +722,163 @@ class MeRetriever(MeRetrieverPretrained):
         all_sim = torch.concat(all_sim, dim=0)
         all_mask = torch.concat(all_mask, dim=0)
         return all_sim, all_mask
+
+    def get_test_max_similarity_logits(self, sequence_output, visual_output, attention_mask, video_mask, group_mask):
+        sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
+
+        if self.training:
+            visual_output = allgather(visual_output, self.task_config, keep_itself=True)
+            video_mask = allgather(video_mask, self.task_config)
+            sequence_output = allgather(sequence_output, self.task_config, keep_itself=True)
+            group_mask = allgather(group_mask, self.task_config)
+            # noinspection PyUnresolvedReferences
+            torch.distributed.barrier()
+        
+        norms = visual_output.norm(dim=-1, keepdim=True)
+        norms = norms + (norms == 0).float()
+        visual_output = visual_output / norms
+
+        sequences = []
+        sequence_mask = []
+        for i in range(len(sequence_output)):
+            temp = sequence_output[i][group_mask[i] == 1]
+            temp = temp / temp.norm(dim=-1, keepdim=True)
+            sequences.append(temp)
+            temp = torch.zeros(len(temp), len(sequence_output)).to(sequence_output.device)
+            temp[:, i] = 1
+            sequence_mask.append(temp)
+
+        sequence_output = torch.concat(sequences)
+        sequence_mask = torch.concat(sequence_mask)
+        logit_scale = self.clip.logit_scale.exp()
+
+        # First compute similarity between each text and each frame
+        bz, fr, dim = visual_output.size()
+        visual_output = visual_output.view(bz * fr, dim)  # (bz*fr, dim)
+
+        # Calculate similarities between all texts and frames
+        retrieve_logits = logit_scale * torch.matmul(sequence_output, visual_output.T)  # (num_texts, bz*fr)
+
+        # Reshape to group frames by video
+        retrieve_logits = retrieve_logits.view(retrieve_logits.size(0), bz, fr)  # (num_texts, bz, fr)
+
+        # Get max similarity across frames for each text-video pair
+        retrieve_logits = retrieve_logits.max(dim=-1)[0]  # (num_texts, bz)
+
+        return retrieve_logits, sequence_mask
+    
+    def get_test_avg_similarity_logits(self, sequence_output, visual_output, attention_mask, video_mask, group_mask):
+        sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
+
+        if self.training:
+            visual_output = allgather(visual_output, self.task_config, keep_itself=True)
+            video_mask = allgather(video_mask, self.task_config)
+            sequence_output = allgather(sequence_output, self.task_config, keep_itself=True)
+            group_mask = allgather(group_mask, self.task_config)
+            # noinspection PyUnresolvedReferences
+            torch.distributed.barrier()
+        
+        norms = visual_output.norm(dim=-1, keepdim=True)
+        norms = norms + (norms == 0).float()
+        visual_output = visual_output / norms
+
+        sequences = []
+        sequence_mask = []
+        for i in range(len(sequence_output)):
+            temp = sequence_output[i][group_mask[i] == 1]
+            temp = temp / temp.norm(dim=-1, keepdim=True)
+            sequences.append(temp)
+            temp = torch.zeros(len(temp), len(sequence_output)).to(sequence_output.device)
+            temp[:, i] = 1
+            sequence_mask.append(temp)
+
+        sequence_output = torch.concat(sequences)
+        sequence_mask = torch.concat(sequence_mask)
+        logit_scale = self.clip.logit_scale.exp()
+
+        # First compute similarity between each text and each frame
+        bz, fr, dim = visual_output.size()
+        visual_output = visual_output.view(bz * fr, dim)
+        retrieval_logits = logit_scale * torch.matmul(sequence_output, visual_output.T)
+        retrieval_logits = retrieval_logits.view(retrieval_logits.size(0), bz, fr)
+        retrieval_logits = retrieval_logits.mean(dim=-1)
+        return retrieval_logits, sequence_mask
+    
+    def get_test_lse_similarity_logits(self, sequence_output, visual_output, attention_mask, video_mask, group_mask):
+        sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
+
+        if self.training:
+            visual_output = allgather(visual_output, self.task_config, keep_itself=True)
+            video_mask = allgather(video_mask, self.task_config)
+            sequence_output = allgather(sequence_output, self.task_config, keep_itself=True)
+            group_mask = allgather(group_mask, self.task_config)
+            # noinspection PyUnresolvedReferences
+            torch.distributed.barrier()
+        
+        norms = visual_output.norm(dim=-1, keepdim=True)
+        norms = norms + (norms == 0).float()
+        visual_output = visual_output / norms
+
+        sequences = []
+        sequence_mask = []
+        for i in range(len(sequence_output)):
+            temp = sequence_output[i][group_mask[i] == 1]
+            temp = temp / temp.norm(dim=-1, keepdim=True)
+            sequences.append(temp)
+            temp = torch.zeros(len(temp), len(sequence_output)).to(sequence_output.device)
+            temp[:, i] = 1
+            sequence_mask.append(temp)
+
+        sequence_output = torch.concat(sequences)
+        sequence_mask = torch.concat(sequence_mask)
+        logit_scale = self.clip.logit_scale.exp()
+        # First compute similarity between each text and each frame
+        bz, fr, dim = visual_output.size()
+        visual_output = visual_output.view(bz * fr, dim)
+        retrieval_logits = logit_scale * torch.matmul(sequence_output, visual_output.T) # (num_texts, bz*fr)
+        retrieval_logits = retrieval_logits.contiguous().view(retrieval_logits.size(0), bz, fr)  # (num_texts, bz, fr)
+        retrieval_logits = retrieval_logits.permute(1,2,0) # (bz, fr, num_texts)
+        retrieval_logits = torch.logsumexp(retrieval_logits, dim=1) # (bz, num_texts)
+        return retrieval_logits.T, sequence_mask
+    
+    def get_test_all_similarity_logits(self, sequence_output, visual_output, attention_mask, video_mask, group_mask):
+        sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
+
+        if self.training:
+            visual_output = allgather(visual_output, self.task_config, keep_itself=True)
+            video_mask = allgather(video_mask, self.task_config)
+            sequence_output = allgather(sequence_output, self.task_config, keep_itself=True)
+            group_mask = allgather(group_mask, self.task_config)
+            # noinspection PyUnresolvedReferences
+            torch.distributed.barrier()
+        
+        norms = visual_output.norm(dim=-1, keepdim=True)
+        norms = norms + (norms == 0).float()
+        visual_output = visual_output / norms
+
+        sequences = []
+        sequence_mask = []
+        for i in range(len(sequence_output)):
+            temp = sequence_output[i][group_mask[i] == 1]
+            temp = temp / temp.norm(dim=-1, keepdim=True)
+            sequences.append(temp)
+            temp = torch.zeros(len(temp), len(sequence_output)).to(sequence_output.device)
+            temp[:, i] = 1
+            sequence_mask.append(temp)
+
+        sequence_output = torch.concat(sequences)
+        sequence_mask = torch.concat(sequence_mask)
+        logit_scale = self.clip.logit_scale.exp()
+        # First compute similarity between each text and each frame
+        bz, fr, dim = visual_output.size()
+        visual_output = visual_output.view(bz * fr, dim)
+        retrieve_logits = logit_scale * torch.matmul(sequence_output, visual_output.T)
+
+        retrieve_logits = retrieve_logits.contiguous().view(retrieve_logits.size(0), bz, fr)  # (num_texts, bz, fr)
+        max_retrieve_logits = retrieve_logits.max(dim=-1)[0]  # (num_texts, bz)
+
+        retrieve_logits = retrieve_logits.permute(1,2,0) # (bz, fr, num_texts)
+        retrieve_logits = torch.logsumexp(retrieve_logits, dim=1) # (bz, num_texts)
+        lse_retrieve_logits = retrieve_logits.T
+
+        return max_retrieve_logits, lse_retrieve_logits, sequence_mask
