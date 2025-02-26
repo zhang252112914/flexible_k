@@ -9,7 +9,9 @@ import numpy as np
 import json
 import torch
 import math
-from dataloaders.rawvideo_util import RawVideoExtractor
+from dataaders.rawvideo_util import RawVideoExtractor
+from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
+from torch.utils.data import DataLoader
 
 
 class ActivityNetMeDataLoader(Dataset):
@@ -264,3 +266,37 @@ class ActivityNetMeDataLoader(Dataset):
         vt_mask = self._get_vt_mask(video_mask, duration, timestamps)
         ranges = self.generate_event_range(duration, starts, ends)
         return pairs_text, pairs_mask, group_mask, video, video_mask, vt_mask, sentences_num, ranges
+    
+def test_dataloader():
+    config = {
+        "batch_size" : 2,
+        "num_workers" : 2,
+    }
+
+    activity_dataset = ActivityNetMeDataLoader(subset="train", data_path="/home/zyl/activitynet/captions", features_path="/home/zyl/activitynet/all_train_val_3fps", tokenizer=ClipTokenizer(), max_words=77, feature_framerate=1.0, max_frames=64, image_resolution=224, frame_order=0, slice_framepos=0, K=32, fps=3, min_dur=None, max_dur=None)
+    train_sampler = None
+    dataloader = DataLoader(
+    activity_dataset,
+    batch_size=config["batch_size"],
+    num_workers=config["num_workers"],
+    pin_memory=False,
+    shuffle=(train_sampler is None),
+    sampler=train_sampler,
+    drop_last=True,
+    )
+    try :
+        for i, batch in enumerate(dataloader):
+            print(i)
+            del batch
+    except Exception as e:
+        print(e)
+        print("Error in dataloader")
+    finally:
+        del dataloader
+        del activity_dataset
+        del train_sampler
+        torch.cuda.empty_cache()
+    return
+
+if __name__ == "__main__":
+    test_dataloader()
