@@ -9,7 +9,7 @@ import numpy as np
 import json
 import torch
 import math
-from dataaders.rawvideo_util import RawVideoExtractor
+from dataloaders.rawvideo_util import RawVideoExtractor
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from torch.utils.data import DataLoader
 
