@@ -5,6 +5,7 @@ from dataloaders.dataloader_charades import CharadesMeDataloader
 from dataloaders.mydataloader_charades import MyCharadesMeDataloader
 from dataloaders.shuffle_dataloader_charades import ShuffleCharadesMeDataloader
 from dataloaders.shuffle_dataloader_activitynet import ShuffleActivityNetMeDataLoader
+from dataloaders.mydataloader_activity import MyActivityNetMeDataLoader
 
 def dataloader_factory(args, tokenizer, logger):
     assert args.datatype in DATALOADER_DICT
@@ -45,8 +46,8 @@ def dataloader_factory(args, tokenizer, logger):
     return train_dataloader, test_dataloader, train_length, test_length, train_sampler
 
 
-def dataloader_activity_train(args, tokenizer):
-    activity_dataset = ActivityNetMeDataLoader(
+def mydataloader_activity_train(args, tokenizer):
+    activity_dataset = MyActivityNetMeDataLoader(
         subset="train",
         data_path=args.data_path,
         features_path=args.features_path,
@@ -220,7 +221,7 @@ def shuffle_dataloader_charades_train(args, tokenizer):
     return dataloader, len(dataset), sampler
 
 # modified charades part
-DATALOADER_DICT = {"activity": {"train": dataloader_activity_train, "val": dataloader_activity_test, "test": None},
+DATALOADER_DICT = {"activity": {"train": mydataloader_activity_train, "val": dataloader_activity_test, "test": None},
                    "charades": {"train": mydataloader_charades_train, "val": dataloader_charades_test,
                                 "test": dataloader_charades_test}}
 DATALOADER_DICT2 = {"activity": {"train": shuffle_dataloader_activity_train, "val": dataloader_activity_test, "test": None},

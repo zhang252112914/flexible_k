@@ -97,16 +97,25 @@ def pick_frames_event_local(sequence_output, visual_output, group_mask, video_ma
             # 检查对应区域是否具有足够的帧数
             # 检查两次的必要性在于，第二次是避免舍入造成的帧数不足
 
-            duration = end - start
-            if duration < min(K, k):
-                make_up = min(K, k) - duration
-                new_start = max(0, start - make_up)
-                if new_start == 0:
-                    end = min(num_frames, end + make_up - start)
-                    start = 0
-                else:
-                    start = new_start
+            # duration = end - start
+            # if duration < min(K, k):
+            #     make_up = min(K, k) - duration
+            #     new_start = max(0, start - make_up)
+            #     if new_start == 0:
+            #         end = min(num_frames, end + make_up - start)
+            #         start = 0
+            #     else:
+            #         start = new_start
 
+            if (end - start) <= min(k, K):
+                for m in range(K):
+                    if (end - start) > min(k, K):
+                        break
+                    else:
+                        if start > 0:
+                            start -= 1
+                        if end < num_frames:
+                            end += 1
             #print (start - end, min(k, K))
 
             frame_embeddings = visual_output[i][start:end]

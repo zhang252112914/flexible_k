@@ -1,7 +1,7 @@
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun --nproc_per_node=8 \
 --master_port=53198 \
 main.py --do_train \
---num_thread_reader=2 \
+--num_thread_reader=1 \
 --data_path /home/zyl/activitynet/captions \
 --features_path /home/zyl/activitynet/all_train_val_3fps \
 --output_dir /home/zyl/flexible_k/output_an/output_global_local5 \
