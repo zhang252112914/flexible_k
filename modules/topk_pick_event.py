@@ -93,6 +93,8 @@ def pick_frames_event_local(sequence_output, visual_output, group_mask, video_ma
             n += 1
             sentence_embedding = sequence_output[i, j].unsqueeze(0)
             start, end = ranges[i][j]
+            start = start.item()
+            end = end.item()
 
             # 检查对应区域是否具有足够的帧数
             # 检查两次的必要性在于，第二次是避免舍入造成的帧数不足
@@ -122,7 +124,12 @@ def pick_frames_event_local(sequence_output, visual_output, group_mask, video_ma
             frame_mask = video_mask[i][start:end]
             frame_embeddings = frame_embeddings[frame_mask == 1]
             similarity = F.cosine_similarity(sentence_embedding, frame_embeddings, dim=1)
-
+            
+            if similarity.size(0) < min(k, K):
+                print(start, end)
+                print(similarity.size(0))
+                print(visual_output[i].size(0))
+                print(min(k, K))
             top_k_indices = similarity.topk(min(K, k), largest=True).indices + start
             frame_indices.append(top_k_indices)
             frames_texts_mask[i, acc:acc+len(top_k_indices), j] = 1

@@ -273,7 +273,7 @@ def test_dataloader():
         "num_workers" : 2,
     }
 
-    activity_dataset = ActivityNetMeDataLoader(subset="train", data_path="/home/zyl/activitynet/captions", features_path="/home/zyl/activitynet/all_train_val_3fps", tokenizer=ClipTokenizer(), max_words=77, feature_framerate=1.0, max_frames=64, image_resolution=224, frame_order=0, slice_framepos=0, K=32, fps=3, min_dur=None, max_dur=None)
+    activity_dataset = MyActivityNetMeDataLoader(subset="train", data_path="/home/zyl/activitynet/captions", features_path="/home/zyl/activitynet/all_train_val_3fps", tokenizer=ClipTokenizer(), max_words=77, feature_framerate=1.0, max_frames=64, image_resolution=224, frame_order=0, slice_framepos=0, K=32, fps=3, min_dur=None, max_dur=None)
     train_sampler = None
     dataloader = DataLoader(
     activity_dataset,
