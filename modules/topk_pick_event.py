@@ -134,11 +134,17 @@ def pick_frames_event_local(sequence_output, visual_output, group_mask, video_ma
                     if (temp_frames_num+valid_frames_num) > target_num:
                         frame_embeddings[temp_frames_num:] = valid_frames[:target_num-temp_frames_num]
                     else:
-                        frame_embeddings[temp_frames_num:] = valid_frames
+                        frame_embeddings[temp_frames_num:temp_frames_num+valid_frames_num] = valid_frames
                     temp_frames_num += valid_frames_num
                 
                 # 选取相似度最高的k帧的索引
                 similarity = F.cosine_similarity(sentence_embedding, frame_embeddings, dim=1)
+                if similarity.shape[0] < min(k, K):
+                    print(min(k,K))
+                    print(similarity.shape)
+                    print(start, end)
+                    print(frame_mask)
+                    print(valid_frames_num)
                 top_k_indices = similarity.topk(min(K, k), largest=True).indices # + start
 
                 # 由于之前填充的原因，所以复制的帧实际上也应该指向同一帧，这里进行还原
