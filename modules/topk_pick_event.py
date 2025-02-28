@@ -122,15 +122,34 @@ def pick_frames_event_local(sequence_output, visual_output, group_mask, video_ma
 
             frame_embeddings = visual_output[i][start:end]
             frame_mask = video_mask[i][start:end]
-            frame_embeddings = frame_embeddings[frame_mask == 1]
-            similarity = F.cosine_similarity(sentence_embedding, frame_embeddings, dim=1)
-            
-            if similarity.size(0) < min(k, K):
-                print(start, end)
-                print(similarity.size(0))
-                print(visual_output[i].size(0))
-                print(min(k, K))
-            top_k_indices = similarity.topk(min(K, k), largest=True).indices + start
+
+            # 检查是否存在有效帧不足导致无法填满start-end区间的情况
+            valid_frames_num = frame_mask.sum().item()
+            if valid_frames_num < (end - start):
+                valid_frames = frame_embeddings[frame_mask == 1]
+                target_num = end - start
+                temp_frames_num = valid_frames_num
+                
+                while temp_frames_num < target_num: # 复制有效区间不断填充
+                    if (temp_frames_num+valid_frames_num) > target_num:
+                        frame_embeddings[temp_frames_num:] = valid_frames[:target_num-temp_frames_num]
+                    else:
+                        frame_embeddings[temp_frames_num:] = valid_frames
+                    temp_frames_num += valid_frames_num
+                
+                # 选取相似度最高的k帧的索引
+                similarity = F.cosine_similarity(sentence_embedding, frame_embeddings, dim=1)
+                top_k_indices = similarity.topk(min(K, k), largest=True).indices # + start
+
+                # 由于之前填充的原因，所以复制的帧实际上也应该指向同一帧，这里进行还原
+                for idx in range(len(top_k_indices)):
+                    top_k_indices[idx] = (top_k_indices[idx] % valid_frames_num) + start
+
+            else: # start-end区间内帧数充足
+                frame_embeddings = frame_embeddings[frame_mask == 1]
+                similarity = F.cosine_similarity(sentence_embedding, frame_embeddings, dim=1)
+                top_k_indices = similarity.topk(min(K, k), largest=True).indices + start
+
             frame_indices.append(top_k_indices)
             frames_texts_mask[i, acc:acc+len(top_k_indices), j] = 1
             acc += len(top_k_indices)
